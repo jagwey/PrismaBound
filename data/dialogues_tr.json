@@ -1,0 +1,21 @@
+{
+  "intro": [
+    {"speaker":"Yabancı","text":"Bir an önce kendi odamdaydım. Şimdi gökyüzünde iki ay var.\nVe ağaçların arasındaki şey... bana doğru geliyor."},
+    {"speaker":"Prizma Ruhu","text":"Bu dünyaya ait değilsin. Burada seni koruyacak hiçbir gücün yok.\nAma sana bir teklifim var."},
+    {"speaker":"Prizma Ruhu","text":"Gücümü kabul et. Sana yöneltilen saldırıları sahibine geri verebilirsin.\nAma bunun bir bedeli olacak.","choice":"pact"},
+    {"speaker":"Prizma Ruhu","text":"Artık hiçbir silahı tutamayacaksın. Yalnızca bu kalkan.\nHayatta kalmak için dünyayı dinlemeyi öğren."},
+    {"speaker":"Yabancı","text":"Kolumdaki işaret yanıyor. Kalkanın içinde biri nefes alıyor.\nEve dönmek istiyorsam, şimdilik ona güvenmeliyim."}
+  ],
+  "region_0": [{"speaker":"Prizma Ruhu","text":"Kayıp Orman. Burası eskiden şarkı söylerdi.\nSağ fareyle savun. Mermi yaklaşırken sol fareye bas. Kalkanını saldırıya çevir."}],
+  "region_1": [{"speaker":"Prizma Ruhu","text":"Kristaller ışığı hatırlar. Bazen bir saldırıyı sahibine ulaştırmak için ikinci bir ayna gerekir.\nKırık Ayna açıldı. Q ile değiştir. R'yi basılı tutarak enerji depolayabilirsin; C ile bırak."}],
+  "region_2": [{"speaker":"Yabancı","text":"Bu kaledeki her zırh aynı işareti taşıyor. Kolumdaki işareti.\nBenden önce kaç kişiye yardım ettin?"},{"speaker":"Prizma Ruhu","text":"...Yardım etmeyi denediğim herkes beni affetmedi.\nOdak ve Ağır Ayna artık senin. Ağır mermilere karşı Ağır Ayna'yı seç."}],
+  "region_3": [{"speaker":"Prizma Ruhu","text":"Ruh Aynası görünmeyeni açığa çıkarır. Bu tapınakta gözlerine değil, kalkanına güven."},{"speaker":"Yabancı","text":"Duvarlarda beş parçaya ayrılan bir ruh var.\nBeni buraya sen getirdin, değil mi?"},{"speaker":"Prizma Ruhu","text":"Evet. Başta seni yalnızca bir yol sandım.\nAma korktuğunda bile beni bırakmadın. Bunu hesaplamamıştım."}],
+  "region_4": [{"speaker":"Prizma Ruhu","text":"Prizma Modu açıldı. Bütün renkler aynı ışığın parçaları.\nKarşımızdaki, geri almak istediğim güç. Beni bile dinlemiyor."},{"speaker":"Yabancı","text":"O zaman bu kez sen bana güven.\nBittiğinde, ne olacağımıza birlikte karar vereceğiz."}],
+  "boss_0": [{"speaker":"Prizma Ruhu","text":"İlk parça... Muhafız bizi korumaya çalışıyordu.\nYanlış şeyi korumayı ben öğrettim."}],
+  "boss_1": [{"speaker":"Yabancı","text":"Kalkan artık daha ağır. Senin sesinse daha net.\nTopladığımız her parça seni değiştiriyor."}],
+  "boss_2": [{"speaker":"Prizma Ruhu","text":"Şövalye son savaşa benim adımla girdi.\nHatırlamak, kaybettiğim güçten daha ağır."}],
+  "boss_3": [{"speaker":"Prizma Ruhu","text":"Kâhin gerçeği saklamıyordu. Onu ben susturdum.\nBeni durdurman gerekirse... tereddüt etme."}],
+  "boss_4": [{"speaker":"Prizma Ruhu","text":"Artık bütünüm. Ama ilk kez ne yapacağımı bilmiyorum.\nSeni seçtim. Şimdi seçim senin."}],
+  "ending_a": [{"speaker":"Laneti Kırmak","text":"Kalkanı son kez kaldırdın. Bu kez bir saldırıyı değil, sana yazılmış kaderi yansıttın.\nİşaret söndü. Eve açılan kapıda ruhun sesi duyuldu: 'Bu kez seni ben bırakıyorum.'"},{"speaker":"Yabancı","text":"Odamın penceresinde gün doğuyor. Avucumda küçücük bir cam parçası.\nIşık vurduğunda, uzakta bir ormanın şarkısını duyuyorum."}],
+  "ending_b": [{"speaker":"Prizmayla Birleşmek","text":"Eve açılan kapı kapandı. Sen ve ruh, gücü birbirinize hükmetmeden taşımayı seçtiniz.\nAsterra'nın göğünde ilk kez bütün renkler birlikte parladı."},{"speaker":"Prizma Ruhu","text":"Artık yalnız değiliz.\nYabancı: Hayır. Ama bu dünyada hâlâ öğreneceğimiz çok şey var."}]
+}
