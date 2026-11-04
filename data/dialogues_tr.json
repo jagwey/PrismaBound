@@ -10,12 +10,12 @@
     },
     {
       "speaker": "Prizma Ruhu",
-      "text": "Gücümü kabul et. Sana yöneltilen saldırıları sahibine geri verebilirsin.\nAma bunun bir bedeli olacak.",
+      "text": "Gücümü kabul et. Sol tıkla saldırıları sahibine geri yansıtabilirsin.\nAma bunun bir bedeli olacak: tek vuruşta ölürsün.",
       "choice": "pact"
     },
     {
       "speaker": "Prizma Ruhu",
-      "text": "Artık hiçbir silahı tutamayacaksın. Yalnızca bu kalkan.\nHayatta kalmak için dünyayı dinlemeyi öğren."
+      "text": "Artık hiçbir silahı tutamayacaksın. Yalnızca bu kalkan.\nSağ tıkla fırlat, tekrar sağ tıkla geri çağır. Shift zamanı yavaşlatır, Ctrl ile atılırsın. Ölürsen R odayı baştan başlatır."
     },
     {
       "speaker": "Yabancı",
@@ -25,13 +25,13 @@
   "region_0": [
     {
       "speaker": "Prizma Ruhu",
-      "text": "Kayıp Orman. Burası eskiden şarkı söylerdi.\nSağ fareyle savun. Mermi yaklaşırken sol fareye bas. Kalkanını saldırıya çevir."
+      "text": "Kayıp Orman. Burası eskiden şarkı söylerdi.\nMermi yaklaşırken sol tıkla ve yansıt. Sağ tıkla kalkanı fırlat. Tek vuruşta ölürsün, dikkatli ol."
     }
   ],
   "region_1": [
     {
       "speaker": "Prizma Ruhu",
-      "text": "Kristaller ışığı hatırlar. Bazen bir saldırıyı sahibine ulaştırmak için ikinci bir ayna gerekir.\nKırık Ayna açıldı. Q ile değiştir. R'yi basılı tutarak enerji depolayabilirsin; C ile bırak."
+      "text": "Kristaller ışığı hatırlar. Bazen bir saldırıyı sahibine ulaştırmak için duvardan sektirmek gerekir.\nIşın düşmanlarına dikkat et. Zor anda Shift ile zamanı yavaşlat."
     }
   ],
   "region_2": [
@@ -41,13 +41,13 @@
     },
     {
       "speaker": "Prizma Ruhu",
-      "text": "...Yardım etmeyi denediğim herkes beni affetmedi.\nOdak ve Ağır Ayna artık senin. Ağır mermilere karşı Ağır Ayna'yı seç."
+      "text": "...Yardım etmeyi denediğim herkes beni affetmedi.\nZırhlı olanlara önden vurma. Kalkanını fırlat ya da arkasından yansıt."
     }
   ],
   "region_3": [
     {
       "speaker": "Prizma Ruhu",
-      "text": "Ruh Aynası görünmeyeni açığa çıkarır. Bu tapınakta gözlerine değil, kalkanına güven."
+      "text": "Bu tapınakta yakın dövüşçüler sürü halinde gelir. Kalkanını fırlat, sektir, hepsini temizle."
     },
     {
       "speaker": "Yabancı",

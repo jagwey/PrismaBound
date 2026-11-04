@@ -77,7 +77,20 @@ func test_data() -> void:
 			total += 1
 			var reason: String = PrismRoom.validate_room(room)
 			check(reason == "", "room %s valid: %s" % [room.get("id", "?"), reason])
-	check(total >= 10, "enough rooms")
+	check(total >= 29, "enough rooms: %d" % total)
+	var seen_ids := {}
+	for ci in range(1, 5):
+		var ch: Array = data["chapters"][ci]
+		check(ch.size() >= 5 and ch.size() <= 7, "chapter %d has 5-7 rooms: %d" % [ci, ch.size()])
+		var last: Dictionary = ch[ch.size() - 1]
+		check(last.get("boss") != null and int(last["boss"]) == ci, "chapter %d last room is boss %d" % [ci, ci])
+		for ri in ch.size() - 1:
+			check(ch[ri].get("boss") == null, "chapter %d room %d is not boss" % [ci, ri])
+			check((ch[ri]["enemies"] as Array).size() <= 5, "chapter %d room %d <= 5 enemies" % [ci, ri])
+	for chapter in data["chapters"]:
+		for room in chapter:
+			check(not seen_ids.has(room["id"]), "unique id %s" % room["id"])
+			seen_ids[room["id"]] = true
 	var forest: Array = data["chapters"][0]
 	check(forest.size() == 6, "Forest has 6 rooms")
 	check(forest[5].get("boss") != null and int(forest[5]["boss"]) == 0, "last Forest room is boss 0")
