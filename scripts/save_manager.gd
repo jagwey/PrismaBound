@@ -6,24 +6,43 @@ static var BACKUP := "user://prismbound_save.backup.json"
 static var SETTINGS := "user://prismbound_settings.json"
 
 static func fresh() -> Dictionary:
-	return {"version": 1, "region": 0, "unlocked": 0, "upgrades": 0, "shards": 0, "cleared": [], "flags": {}, "ending": "", "checkpoint": 0, "hp": 100.0}
+	return {"version": 2, "unlocked_chapter": 0, "best_times": {}, "total_deaths": 0}
+
+static func _is_num(v: Variant) -> bool:
+	return v is float or v is int
 
 static func valid(data: Variant) -> bool:
 	if not data is Dictionary:
 		return false
-	for key in ["version", "region", "unlocked", "upgrades", "shards"]:
-		if not data.has(key) or not (data[key] is float or data[key] is int):
+	for key in ["version", "unlocked_chapter", "total_deaths"]:
+		if not data.has(key) or not _is_num(data[key]):
 			return false
-	if int(data.version) != 1 or int(data.region) < 0 or int(data.region) > 4:
+	if int(data.version) != 2 or int(data.unlocked_chapter) < 0 or int(data.unlocked_chapter) > 4 or int(data.total_deaths) < 0:
 		return false
-	if int(data.unlocked) < 0 or int(data.unlocked) > 4 or int(data.upgrades) < 0 or int(data.upgrades) > 20 or int(data.shards) < 0:
+	if not data.get("best_times") is Dictionary:
 		return false
-	if not data.get("cleared", []) is Array or not data.get("flags", {}) is Dictionary:
-		return false
-	for area in data.get("cleared", []):
-		if not (area is float or area is int) or int(area) < 0 or int(area) > 4:
+	for room in data.best_times:
+		if not _is_num(data.best_times[room]) or float(data.best_times[room]) <= 0.0:
 			return false
-	return data.get("ending", "") is String
+	return true
+
+static func migrate(data: Dictionary) -> Dictionary:
+	if data.has("version") and _is_num(data.version) and int(data.version) == 2:
+		return data
+	var result := fresh()
+	if data.has("unlocked") and _is_num(data.unlocked):
+		result.unlocked_chapter = clampi(int(data.unlocked), 0, 4)
+	return result
+
+static func record_room(data: Dictionary, room_id: String, time: float) -> Dictionary:
+	var result := data.duplicate(true)
+	if time <= 0.0:
+		return result
+	var times: Dictionary = result.get("best_times", {})
+	if not times.has(room_id) or time < float(times[room_id]):
+		times[room_id] = time
+	result.best_times = times
+	return result
 
 static func read_path(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
@@ -32,16 +51,21 @@ static func read_path(path: String) -> Dictionary:
 	if not file:
 		return {}
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	if not valid(parsed):
+	if not parsed is Dictionary:
 		return {}
-	var result := fresh()
-	result.merge(parsed, true)
-	return result
+	var migrated := migrate(parsed)
+	if not valid(migrated):
+		return {}
+	for key in ["version", "unlocked_chapter", "total_deaths"]:
+		migrated[key] = int(migrated[key])
+	return migrated
 
 static func load_game() -> Dictionary:
 	var result := read_path(PATH)
 	if result.is_empty():
 		result = read_path(BACKUP)
+	if result.is_empty():
+		result = fresh()
 	return result
 
 static func save_game(data: Dictionary) -> bool:
@@ -51,7 +75,7 @@ static func save_game(data: Dictionary) -> bool:
 	var file := FileAccess.open(tmp, FileAccess.WRITE)
 	if not file:
 		return false
-	file.store_string(JSON.stringify(data, "\t"))
+	file.store_string(JSON.stringify(data, "	"))
 	file.close()
 	if read_path(tmp).is_empty():
 		return false

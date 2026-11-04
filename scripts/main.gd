@@ -167,16 +167,16 @@ func new_game() -> void:
 func continue_game() -> void:
 	progress = Save.load_game()
 	if progress.is_empty(): notice = "Geçerli kayıt bulunamadı."; show_menu(); return
-	if not str(progress.ending).is_empty():
-		show_ending_summary(str(progress.ending))
-	else: start_world(int(progress.region))
+	if not str(progress.get("ending", "")).is_empty():
+		show_ending_summary(str(progress.get("ending", "")))
+	else: start_world(int(progress.get("region", 0)))
 
 func start_world(area: int) -> void:
 	get_tree().paused = false
 	if is_instance_valid(world):
 		remove_child(world); world.queue_free()
 	progress.region = area
-	progress.unlocked = maxi(int(progress.unlocked), area)
+	progress.unlocked = maxi(int(progress.get("unlocked", 0)), area)
 	world = load("res://scripts/world.gd").new()
 	world.process_mode = Node.PROCESS_MODE_PAUSABLE
 	world.configure(area, progress)
@@ -192,8 +192,8 @@ func start_world(area: int) -> void:
 	show_hud()
 	save_progress()
 	var key := "region_%d" % area
-	if not progress.flags.get(key, false):
-		progress.flags[key] = true
+	if not progress.get("flags", {}).get(key, false):
+		progress["flags"] = progress.get("flags", {}); progress.flags[key] = true
 		play_story(key, func(): show_hud(); save_progress())
 
 func apply_player_settings() -> void:
@@ -203,7 +203,7 @@ func apply_player_settings() -> void:
 
 func save_progress() -> void:
 	if is_instance_valid(world) and is_instance_valid(world.player):
-		progress.flags["checkpoint_region"] = world.region
+		progress["flags"] = progress.get("flags", {}); progress.flags["checkpoint_region"] = world.region
 		progress.flags["checkpoint_id"] = world.checkpoint_id
 	if not Save.save_game(progress): notice = "Kayıt yazılamadı. Klasör erişimini kontrol et."
 
@@ -214,16 +214,17 @@ func on_checkpoint(area: int) -> void:
 	show_altar()
 
 func on_story_requested(key: String) -> void:
-	if stories.has(key) and not progress.flags.get(key, false):
-		progress.flags[key] = true
+	if stories.has(key) and not progress.get("flags", {}).get(key, false):
+		progress["flags"] = progress.get("flags", {}); progress.flags[key] = true
 		play_story(key, show_hud)
 
 func on_region_completed(area: int) -> void:
-	if not progress.cleared.has(area): progress.cleared.append(area)
+	progress["cleared"] = progress.get("cleared", []); if not progress.cleared.has(area): progress.cleared.append(area)
+	progress["flags"] = progress.get("flags", {})
 	progress.flags.erase("checkpoint_region")
 	progress.flags.erase("checkpoint_id")
 	progress.region = mini(area + 1, 4)
-	progress.unlocked = maxi(int(progress.unlocked), int(progress.region))
+	progress.unlocked = maxi(int(progress.get("unlocked", 0)), int(progress.get("region", 0)))
 	Save.save_game(progress)
 	audio.play_effect("victory")
 	play_story("boss_%d" % area, func():
@@ -292,11 +293,11 @@ func show_altar() -> void:
 	clear_ui()
 	panel(Rect2(40, 42, 560, 275))
 	label_at("PRİZMA SUNAĞI", Vector2(66, 60), 25, TEAL)
-	var cost := 15 + int(progress.upgrades) * 10
+	var cost := 15 + int(progress.get("upgrades", 0)) * 10
 	label_at("İlerleme kaydedildi. Can ve direnç yenilendi.", Vector2(66, 105), 13)
-	label_at("Gelişim: %d" % [progress.upgrades], Vector2(66, 139), 13, MUTE)
+	label_at("Gelişim: %d" % [progress.get("upgrades", 0)], Vector2(66, 139), 13, MUTE)
 	var buy := button("DİRENÇ +12  /  %d PARÇA" % cost, Vector2(66, 182), func():
-		progress.upgrades += 1
+		progress.upgrades = int(progress.get("upgrades", 0)) + 1
 		save_progress(); show_altar_refresh(), 300)
 	buy.disabled = true
 	button("YOLA DEVAM", Vector2(66, 228), show_hud, 300).grab_focus()
@@ -317,7 +318,7 @@ func show_final_choice() -> void:
 
 func finish_game(ending: String) -> void:
 	progress.ending = ending
-	progress.flags["ending_" + ending] = true
+	progress["flags"] = progress.get("flags", {}); progress.flags["ending_" + ending] = true
 	Save.save_game(progress)
 	play_story("ending_" + ending, func(): show_ending_summary(ending))
 
