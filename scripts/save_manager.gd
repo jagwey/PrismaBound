@@ -1,9 +1,9 @@
 extends RefCounted
 class_name PrismSave
 
-const PATH := "user://prismbound_save.json"
-const BACKUP := "user://prismbound_save.backup.json"
-const SETTINGS := "user://prismbound_settings.json"
+static var PATH := "user://prismbound_save.json"
+static var BACKUP := "user://prismbound_save.backup.json"
+static var SETTINGS := "user://prismbound_settings.json"
 
 static func fresh() -> Dictionary:
 	return {"version": 1, "region": 0, "unlocked": 0, "upgrades": 0, "shards": 0, "cleared": [], "flags": {}, "ending": "", "checkpoint": 0, "hp": 100.0}
@@ -86,3 +86,4 @@ static func save_settings(settings: Dictionary) -> void:
 	var file := FileAccess.open(SETTINGS, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(settings, "\t"))
+

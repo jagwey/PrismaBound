@@ -200,13 +200,14 @@ func apply_player_settings() -> void:
 	if not is_instance_valid(world) or not is_instance_valid(world.player): return
 	world.player.set("perfect_assist", bool(settings.assist))
 	world.player.set("snap_aim", bool(settings.snap))
+	world.player.set("effects_intensity", float(settings.effects))
 
 func save_progress() -> void:
 	if is_instance_valid(world) and is_instance_valid(world.player):
 		progress.shards = int(world.player.shards)
 		progress.hp = float(world.player.hp)
 		progress.flags["checkpoint_region"] = world.region
-		progress.flags["checkpoint_x"] = world.checkpoint.x
+		progress.flags["checkpoint_id"] = world.checkpoint_id
 	if not Save.save_game(progress): notice = "Kayıt yazılamadı. Klasör erişimini kontrol et."
 
 func on_checkpoint(area: int) -> void:
@@ -223,7 +224,7 @@ func on_story_requested(key: String) -> void:
 func on_region_completed(area: int) -> void:
 	if not progress.cleared.has(area): progress.cleared.append(area)
 	progress.flags.erase("checkpoint_region")
-	progress.flags.erase("checkpoint_x")
+	progress.flags.erase("checkpoint_id")
 	progress.region = mini(area + 1, 4)
 	progress.unlocked = maxi(int(progress.unlocked), int(progress.region))
 	progress.shards = int(world.player.shards)
@@ -298,13 +299,13 @@ func show_altar() -> void:
 	var cost := 15 + int(progress.upgrades) * 10
 	label_at("İlerleme kaydedildi. Can ve direnç yenilendi.", Vector2(66, 105), 13)
 	label_at("Parça: %d     /     Gelişim: %d" % [world.player.shards, progress.upgrades], Vector2(66, 139), 13, MUTE)
-	var buy := button("DİRENÇ +10  /  %d PARÇA" % cost, Vector2(66, 182), func():
+	var buy := button("DİRENÇ +12  /  %d PARÇA" % cost, Vector2(66, 182), func():
 		world.player.shards -= cost
 		progress.upgrades += 1
 		world.player.configure_progress(world.region, int(progress.upgrades))
 		world.player.heal()
 		save_progress(); show_altar_refresh(), 300)
-	buy.disabled = world.player.shards < cost or int(progress.upgrades) >= 10
+	buy.disabled = world.player.shards < cost or int(progress.upgrades) >= 8
 	button("YOLA DEVAM", Vector2(66, 228), show_hud, 300).grab_focus()
 
 func show_altar_refresh() -> void:
@@ -339,7 +340,7 @@ func show_ending_summary(ending: String) -> void:
 	button("ANA MENÜ", Vector2(146, 278), show_menu, 340)
 
 func play_story(key: String, done: Callable) -> void:
-	dialogue_lines = stories.get(key, [])
+	dialogue_lines = stories.get(key, []).duplicate(true)
 	dialogue_index = 0
 	dialogue_done = done
 	if dialogue_lines.is_empty(): done.call(); return
@@ -374,7 +375,7 @@ func next_dialogue() -> void:
 func show_credits() -> void:
 	clear_ui()
 	label_at("TORIMON", Vector2(64, 53), 32, TEAL)
-	label_at("PRISMBOUND — özgün oyun dünyası\n\nGodot Engine / MIT lisansı\nKodla çizilen geçici piksel görseller\nÖzgün algoritmik geçici müzik ve ses tasarımı\nTürkçe hikâye ve arayüz\n\nÜçüncü taraf oyunlardan varlık alınmamıştır.\nTam sanat, müzik ve insan oynanış testleri sürmektedir.", Vector2(64, 108), 14)
+	label_at("PRISMBOUND — özgün oyun dünyası\n\nGodot Engine / MIT lisansı (godotengine.org/license)\nKodla çizilen geçici piksel görseller\nÖzgün algoritmik geçici müzik ve ses tasarımı\nTürkçe hikâye ve arayüz\n\nÜçüncü taraf oyunlardan varlık alınmamıştır.\nTam sanat, müzik ve insan oynanış testleri sürmektedir.", Vector2(64, 108), 14)
 	button("GERİ", Vector2(64, 292), show_menu)
 
 func show_settings(back: String) -> void:
@@ -388,11 +389,11 @@ func show_settings(back: String) -> void:
 	ui.add_child(scroll)
 	var box := VBoxContainer.new(); box.custom_minimum_size.x = 560
 	box.add_theme_constant_override("separation", 10); scroll.add_child(box)
-	for entry in [["master", "Ana ses"], ["music", "Müzik"], ["sfx", "Efekt sesi"]]:
+	for entry in [["master", "Ana ses"], ["music", "Müzik"], ["sfx", "Efekt sesi"], ["effects", "Görsel efekt yoğunluğu"]]:
 		var row := HBoxContainer.new(); box.add_child(row)
 		var title := Label.new(); title.text = entry[1]; title.custom_minimum_size.x = 200; row.add_child(title)
 		var slider := HSlider.new(); slider.min_value = 0; slider.max_value = 1; slider.step = 0.05; slider.value = settings[entry[0]]; slider.custom_minimum_size.x = 300; row.add_child(slider)
-		slider.value_changed.connect(func(value: float): settings[entry[0]] = value; audio.apply(settings); Save.save_settings(settings))
+		slider.value_changed.connect(func(value: float): settings[entry[0]] = value; audio.apply(settings); apply_player_settings(); Save.save_settings(settings))
 	for entry in [["fullscreen", "Tam ekran"], ["vsync", "Dikey senkronizasyon"], ["assist", "Kolay yansıtma zamanlaması"], ["snap", "8 yönlü kalkan nişanı"]]:
 		var check := CheckButton.new(); check.text = entry[1]; check.button_pressed = settings[entry[0]]; box.add_child(check)
 		check.toggled.connect(func(value: bool): settings[entry[0]] = value; apply_display(); apply_player_settings(); Save.save_settings(settings))
@@ -453,6 +454,7 @@ func _process(delta: float) -> void:
 		var names := ["Prizma Kalkanı", "Kırık Ayna", "Odak Aynası", "Ağır Ayna", "Ruh Aynası", "Prizma Modu"]
 		status_label.text = "%s   /   %d parça" % [names[clampi(p.mode, 0, 5)], p.shards]
 		objective_label.text = world.objective
+		objective_label.visible = world.hint_timer <= 0
 		var boss_alive: bool = is_instance_valid(world.boss) and world.boss.hp > 0
 		boss_bar.visible = boss_alive
 		boss_name.visible = boss_alive
@@ -480,4 +482,6 @@ func _draw() -> void:
 	draw_colored_polygon(PackedVector2Array([points[3], points[0], center]), Color("b1d7d3"))
 	for i in 4: draw_line(points[i], points[(i + 1) % 4], TEAL, 1)
 	draw_line(center + Vector2(-70, 104), center + Vector2(70, 104), Color("22394b"), 1)
+
+
 

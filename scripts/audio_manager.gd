@@ -102,3 +102,9 @@ func compose(region: int, boss_music: bool) -> AudioStreamWAV:
 	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	stream.loop_end = count
 	return stream
+
+func _exit_tree() -> void:
+	if is_instance_valid(music_player): music_player.stop()
+	for voice in voices:
+		if is_instance_valid(voice): voice.stop()
+	samples.clear()

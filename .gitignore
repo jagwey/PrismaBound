@@ -3,3 +3,4 @@
 builds/*
 !builds/.gitkeep
 *.tmp
+.superpowers/
