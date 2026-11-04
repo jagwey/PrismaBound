@@ -1,22 +1,15 @@
-# Enemy/boss implementation
+# Enemies and bosses
 
-`scripts/enemy.gd` is a configurable Node2D combat actor. All seven regular enemy types and five bosses share an explicit idle/patrol/detect/telegraph/attack/recover/stunned/dead state machine. Boss names and temporary original geometric pixel silhouettes are Turkish. Threats sleep outside 740 pixels. Attack cycles are deterministic, with wind-ups of 0.65 seconds (regular) or 0.8 seconds (boss), and recovery gaps. Bosses enter phase two below 50% HP; the final boss adds phase three below 25%.
+`scripts/enemy.gd` (`PrismEnemy`): `configure(type, region, is_boss, start_phase)` sonra `add_child`. Tüm saldırılar görünür bir hazırlık (telegraph) ile başlar: normal 0.65 s, boss 0.8 s.
 
-## Patterns
+## Normal düşmanlar (tek vuruş)
+Türler `TYPE_IDS`: `shooter` (düz atış), `feint` (gecikmeli aldatma), `spread` (açılı yelpaze), `armored` (zırhlı: önden gelen yansıyan mermiyi geri çevirir; arkadan yansıma veya fırlatılan kalkan öldürür), `beam` (tekrarlı ışın), `melee` (yakın dövüş). Yansıyan mermi veya fırlatılan kalkan (`hit_by`) öldürür. Oyuncudan 740 px uzakta uyur.
 
-- Forest: seeds, lobbed thorns, ground waves, fan volleys.
-- Mine: heavy crystal, floor waves, crystal fans, sweeping beam segments; vulnerable core during recovery.
-- Castle: fire waves, heavy fire, telegraphed short dash/melee, explosive fan. Non-perfect damage is reduced but not blocked entirely.
-- Temple: spirit orbs, spirit fans, visible beam segments, cursed ground waves. Spirit or Prism mode reveals the boss and enables damage.
-- Prism: elemental sequences, heavy projectiles, dark fan, beam segments; mirrors horizontal player displacement during recovery. Returns first-reflection projectiles only on selected attack cycles and never returns a projectile twice.
+## Boss'lar
+`PrismEnemy.BOSS_HITS[region]` = [3, 4, 4, 5, 5]. Her `hit_by` 1 vuruş sayar (yansıyan mermi veya fırlatılan kalkan); art arda sayılmaması için 0.25 s `BOSS_HIT_GUARD`. Faz artınca 0.8 s sersemler. `hits_left`, `phase`, `display_name` HUD için açıktır. Faz sınırları `phase_for_hits`; faz değişince `phase_changed(phase)`, oda bunu `boss_phase_reached` ile iletir ve ölümden sonra o fazdan devam eder.
 
-Regular enemies teach a straight shot, delayed feint, angled spread, frontal armor, repeated beam emission, spirit vulnerability, and close melee respectively. Melee-only warriors need bash or neighboring ranged/environmental shots for damage.
+## Durum makinesi
+IDLE, PATROL, DETECT, TELEGRAPH, ATTACK, RECOVER, STUNNED, DEAD. `defeated(enemy)` bir kez yayılır; 0.55 s parça animasyonundan sonra düğüm silinir.
 
-## Integration
-
-Call `configure(type, region, is_boss)` before `add_child`. `defeated(enemy)` emits once immediately when HP reaches zero; the enemy removes its collision group and plays a 0.55-second shard animation before freeing. World owns rewards. Boss `phase_changed` is optional for HUD/audio. `hurt_radius` is 16/27 pixels. Player group lookup is lazy and safe. Core must call `intercept_projectile` before damage to support the final boss return.
-
-## Verification and limits
-
-`Godot_v4.7.2-stable_win64_console.exe --headless --path . --script tests/enemy_test.gd` validates configuration, telegraph timing, enemy vocabulary, ghost gating, phase changes, defeat cleanup, final counter ownership and bounded reflection, and all eight projectile categories. 159 checks include recorded patterns and real swept-projectile reflections defeating all five bosses, including a final-boss counter-return. These stationary timing fixtures are **not** proof of human playthrough, balance, navigation or performance. Beam is a chain of travelling luminous segments, not a raycast optical beam. Temple uses visible attacks and harmless hollow decoys for fairness; invisibility-special laser is not implemented. Silhouettes and animation are temporary geometry, not final sprite sheets. Bosses use constrained horizontal movement, not navigation/pathfinding.
-
+## Test
+`godot --headless --path . --script tests/enemy_test.gd` (178 kontrol): yapılandırma, telegraph süreleri, tür davranışları, boss vuruş sayıları ve fazlar, temizlik. Sabit zamanlama düzenekleridir; denge veya insan testi kanıtı değildir.

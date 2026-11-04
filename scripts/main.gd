@@ -6,6 +6,10 @@ const INK := Color("0c1222")
 const PALE := Color("e3e8e9")
 const MUTE := Color("869aac")
 const TEAL := Color("6de0cc")
+const RESTART_DELAY := 0.3
+const AUTO_RESTART := 1.0
+const ACTION_LABELS := {"move_left":"Sola hareket", "move_right":"Sağa hareket", "jump":"Zıpla", "dash":"Atıl", "reflect":"Yansıt", "throw":"Kalkan fırlat", "slow":"Zamanı yavaşlat", "restart":"Odayı yenile", "interact":"Etkileşim", "pause":"Duraklat"}
+const AIM_ACTIONS := ["aim_left", "aim_right", "aim_up", "aim_down"]
 var progress: Dictionary = Save.fresh()
 var settings: Dictionary = Save.defaults()
 var audio: Node
@@ -13,16 +17,21 @@ var world: Node2D
 var layer: CanvasLayer
 var ui: Control
 var hud: Control
-var health_bar: ProgressBar
-var stamina_bar: ProgressBar
-var energy_bar: ProgressBar
-var status_label: Label
+var time_label: Label
+var death_label: Label
+var meter_bar: ProgressBar
 var objective_label: Label
 var boss_bar: ProgressBar
 var boss_name: Label
+var toast_label: Label
+var toast_until_ms := 0
+var death_ms := 0
+var hooked_player: Node
 var page := "menu"
 var clock_time := 0.0
 var stories: Dictionary = {}
+var seen_stories: Dictionary = {}
+var skip_stories := false
 var dialogue_lines: Array = []
 var dialogue_index := 0
 var dialogue_done: Callable
@@ -30,7 +39,6 @@ var remap_action := ""
 var settings_return := "menu"
 var notice := ""
 var boot_args := OS.get_cmdline_user_args()
-const ACTION_LABELS := {"move_left":"Sola hareket", "move_right":"Sağa hareket", "jump":"Zıpla", "dash":"Atıl", "guard":"Savun", "reflect":"Yansıt", "bash":"Kalkan itişi", "mode":"Ayna değiştir", "absorb":"Enerji depola (tut)", "release":"Enerjiyi bırak", "interact":"Etkileşim", "pause":"Duraklat"}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -51,20 +59,24 @@ func _ready() -> void:
 	layer.add_child(ui)
 	show_menu()
 	if "--smoke" in boot_args:
+		skip_stories = true
 		start_world(0)
 
 func setup_input() -> void:
-	var defaults := {"move_left": KEY_A, "move_right": KEY_D, "jump": KEY_SPACE, "dash": KEY_SHIFT, "bash": KEY_F, "mode": KEY_Q, "absorb": KEY_R, "release": KEY_C, "interact": KEY_E, "pause": KEY_ESCAPE}
-	for action in ACTION_LABELS:
-		if not InputMap.has_action(action): InputMap.add_action(action)
+	var keys := {"move_left": KEY_A, "move_right": KEY_D, "jump": KEY_SPACE, "dash": KEY_CTRL, "slow": KEY_SHIFT, "restart": KEY_R, "interact": KEY_E, "pause": KEY_ESCAPE}
+	var mice := {"reflect": MOUSE_BUTTON_LEFT, "throw": MOUSE_BUTTON_RIGHT}
+	var all_actions: Array = ACTION_LABELS.keys() + AIM_ACTIONS
+	for action in all_actions:
+		if not InputMap.has_action(action): InputMap.add_action(action, 0.2 if action in AIM_ACTIONS else 0.5)
 		InputMap.action_erase_events(action)
+	for action in ACTION_LABELS:
 		var event: InputEvent
-		if action == "guard" or action == "reflect":
+		if mice.has(action):
 			event = InputEventMouseButton.new()
-			event.button_index = MOUSE_BUTTON_RIGHT if action == "guard" else MOUSE_BUTTON_LEFT
+			event.button_index = mice[action]
 		else:
 			event = InputEventKey.new()
-			event.physical_keycode = defaults[action]
+			event.physical_keycode = keys[action]
 		var binding: Variant = settings.bindings.get(action)
 		if binding is Dictionary:
 			if binding.get("type") == "key":
@@ -72,14 +84,13 @@ func setup_input() -> void:
 			elif binding.get("type") == "mouse":
 				event = InputEventMouseButton.new(); event.button_index = int(binding.get("code", 1))
 		InputMap.action_add_event(action, event)
-	var buttons := {"jump": JOY_BUTTON_A, "dash": JOY_BUTTON_B, "mode": JOY_BUTTON_Y, "reflect": JOY_BUTTON_RIGHT_SHOULDER, "interact": JOY_BUTTON_X, "pause": JOY_BUTTON_START, "bash": JOY_BUTTON_LEFT_SHOULDER, "release": JOY_BUTTON_DPAD_UP}
+	var buttons := {"jump": JOY_BUTTON_A, "dash": JOY_BUTTON_B, "reflect": JOY_BUTTON_RIGHT_SHOULDER, "throw": JOY_BUTTON_LEFT_SHOULDER, "interact": JOY_BUTTON_X, "restart": JOY_BUTTON_Y, "pause": JOY_BUTTON_START}
 	for action in buttons:
 		var button := InputEventJoypadButton.new()
 		button.button_index = buttons[action]
 		InputMap.action_add_event(action, button)
-	var axes := {"move_left": [JOY_AXIS_LEFT_X, -1.0], "move_right": [JOY_AXIS_LEFT_X, 1.0], "guard": [JOY_AXIS_TRIGGER_RIGHT, 1.0], "absorb": [JOY_AXIS_TRIGGER_LEFT, 1.0], "aim_left": [JOY_AXIS_RIGHT_X, -1.0], "aim_right": [JOY_AXIS_RIGHT_X, 1.0], "aim_up": [JOY_AXIS_RIGHT_Y, -1.0], "aim_down": [JOY_AXIS_RIGHT_Y, 1.0]}
+	var axes := {"move_left": [JOY_AXIS_LEFT_X, -1.0], "move_right": [JOY_AXIS_LEFT_X, 1.0], "slow": [JOY_AXIS_TRIGGER_LEFT, 1.0], "aim_left": [JOY_AXIS_RIGHT_X, -1.0], "aim_right": [JOY_AXIS_RIGHT_X, 1.0], "aim_up": [JOY_AXIS_RIGHT_Y, -1.0], "aim_down": [JOY_AXIS_RIGHT_Y, 1.0]}
 	for action in axes:
-		if not InputMap.has_action(action): InputMap.add_action(action, 0.2)
 		var axis := InputEventJoypadMotion.new()
 		axis.axis = axes[action][0]; axis.axis_value = axes[action][1]
 		InputMap.action_add_event(action, axis)
@@ -95,6 +106,7 @@ func clear_ui() -> void:
 		ui.remove_child(child)
 		child.queue_free()
 	hud = null
+	toast_label = null
 	remap_action = ""
 
 func label_at(text: String, pos: Vector2, size: int = 14, color: Color = PALE, width: float = 580) -> Label:
@@ -133,19 +145,28 @@ func button(text: String, pos: Vector2, callback: Callable, width: float = 220) 
 	ui.add_child(b)
 	return b
 
+func has_save() -> bool:
+	return FileAccess.file_exists(Save.PATH) or FileAccess.file_exists(Save.BACKUP)
+
+func reset_time() -> void:
+	if is_instance_valid(world) and world.get("time_control") != null: world.time_control.reset()
+	Engine.time_scale = 1.0
+
 func show_menu() -> void:
+	reset_time()
 	get_tree().paused = false
 	if is_instance_valid(world):
 		remove_child(world); world.queue_free(); world = null
+	hooked_player = null
 	page = "menu"
 	clear_ui()
 	audio.set_region(-1)
 	label_at("T O R I M O N   /   BİR YANSIMA HİKÂYESİ", Vector2(42, 36), 10, TEAL)
 	label_at("PRISMBOUND", Vector2(39, 61), 42)
-	label_at("Her saldırı, yeni bir ihtimal.", Vector2(43, 113), 13, MUTE)
+	label_at("Tek vuruş. Tek yansıma.", Vector2(43, 113), 13, MUTE)
 	button("YENİ OYUN", Vector2(44, 161), confirm_new, 210).grab_focus()
 	var cont := button("DEVAM ET", Vector2(44, 197), continue_game, 210)
-	cont.disabled = Save.load_game().is_empty()
+	cont.disabled = not has_save()
 	button("AYARLAR", Vector2(44, 233), func(): show_settings("menu"), 102)
 	button("EKİP", Vector2(152, 233), show_credits, 102)
 	button("ÇIKIŞ", Vector2(44, 269), func(): get_tree().quit(), 210)
@@ -153,7 +174,7 @@ func show_menu() -> void:
 	if not notice.is_empty(): label_at(notice, Vector2(280, 292), 11, TEAL, 330)
 
 func confirm_new() -> void:
-	if Save.load_game().is_empty(): new_game(); return
+	if not has_save(): new_game(); return
 	clear_ui()
 	label_at("Yeni yolculuk", Vector2(64, 76), 28)
 	label_at("Mevcut ilerleme yeni oyunun ilk kaydıyla değiştirilecek.", Vector2(64, 130), 14)
@@ -162,39 +183,42 @@ func confirm_new() -> void:
 
 func new_game() -> void:
 	progress = Save.fresh()
+	seen_stories.clear()
 	play_story("intro", func(): start_world(0))
 
 func continue_game() -> void:
 	progress = Save.load_game()
-	if progress.is_empty(): notice = "Geçerli kayıt bulunamadı."; show_menu(); return
-	if not str(progress.get("ending", "")).is_empty():
-		show_ending_summary(str(progress.get("ending", "")))
-	else: start_world(int(progress.get("region", 0)))
+	seen_stories.clear()
+	start_world(clampi(int(progress.get("unlocked_chapter", 0)), 0, 4))
 
 func start_world(area: int) -> void:
+	reset_time()
 	get_tree().paused = false
 	if is_instance_valid(world):
 		remove_child(world); world.queue_free()
-	progress.region = area
-	progress.unlocked = maxi(int(progress.get("unlocked", 0)), area)
+	hooked_player = null
 	world = load("res://scripts/world.gd").new()
 	world.process_mode = Node.PROCESS_MODE_PAUSABLE
 	world.configure(area, 0)
-	world.chapter_completed.connect(on_region_completed)
+	world.chapter_completed.connect(on_chapter_completed)
 	world.room_completed.connect(on_room_completed)
 	world.story_requested.connect(on_story_requested)
 	world.player_died.connect(on_player_died)
 	add_child(world)
-	apply_player_settings()
-	if world.player.has_signal("combat_event"): world.player.combat_event.connect(audio.play_effect)
+	hook_player()
 	audio.set_region(area)
-	page = "game"
 	show_hud()
-	save_progress()
-	var key := "region_%d" % area
-	if not progress.get("flags", {}).get(key, false):
-		progress["flags"] = progress.get("flags", {}); progress.flags[key] = true
-		play_story(key, func(): show_hud(); save_progress())
+	play_story_once("region_%d" % area, show_hud)
+
+# A new player node is built per room: hook it on every build and restart.
+func hook_player() -> void:
+	if not is_instance_valid(world) or not is_instance_valid(world.player): return
+	var p: Node = world.player
+	if p == hooked_player: return
+	hooked_player = p
+	apply_player_settings()
+	if p.has_signal("combat_event") and not p.combat_event.is_connected(audio.play_effect):
+		p.combat_event.connect(audio.play_effect)
 
 func apply_player_settings() -> void:
 	if not is_instance_valid(world) or not is_instance_valid(world.player): return
@@ -202,46 +226,52 @@ func apply_player_settings() -> void:
 	world.player.set("effects_intensity", float(settings.effects))
 
 func save_progress() -> void:
-	if is_instance_valid(world) and is_instance_valid(world.player):
-		progress["flags"] = progress.get("flags", {}); progress.flags["checkpoint_region"] = world.chapter
-		progress.flags["checkpoint_id"] = world.room_index
 	if not Save.save_game(progress): notice = "Kayıt yazılamadı. Klasör erişimini kontrol et."
 
-func on_room_completed(_room_id: String, _time: float) -> void:
+func on_room_completed(room_id: String, time: float) -> void:
+	progress = Save.record_room(progress, room_id, time)
+	save_progress()
 	audio.play_effect("checkpoint")
+	var best: float = float(progress.best_times.get(room_id, time))
+	show_toast("Süre %.2f · En iyi %.2f" % [time, best])
+
+func show_toast(text: String) -> void:
+	if not is_instance_valid(ui): return
+	if is_instance_valid(toast_label): toast_label.queue_free()
+	toast_label = label_at(text, Vector2(170, 150), 16, TEAL, 300)
+	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	toast_until_ms = Time.get_ticks_msec() + 2500
 
 func on_story_requested(key: String) -> void:
-	if stories.has(key) and not progress.get("flags", {}).get(key, false):
-		progress["flags"] = progress.get("flags", {}); progress.flags[key] = true
-		play_story(key, show_hud)
+	play_story_once(key, show_hud)
 
-func on_region_completed(area: int) -> void:
-	progress["cleared"] = progress.get("cleared", []); if not progress.cleared.has(area): progress.cleared.append(area)
-	progress["flags"] = progress.get("flags", {})
-	progress.flags.erase("checkpoint_region")
-	progress.flags.erase("checkpoint_id")
-	progress.region = mini(area + 1, 4)
-	progress.unlocked = maxi(int(progress.get("unlocked", 0)), int(progress.get("region", 0)))
-	Save.save_game(progress)
+func on_chapter_completed(area: int) -> void:
+	progress.unlocked_chapter = clampi(maxi(int(progress.get("unlocked_chapter", 0)), area + 1), 0, 4)
+	save_progress()
 	audio.play_effect("victory")
-	play_story("boss_%d" % area, func():
-		if area == 4: show_final_choice()
-		else: start_world(area + 1))
+	if area >= 4:
+		play_story("ending_a", show_credits)
+	else:
+		start_world(area + 1)
 
 func on_player_died() -> void:
-	get_tree().paused = true
+	if page != "game": return
+	progress.total_deaths = int(progress.get("total_deaths", 0)) + 1
+	death_ms = Time.get_ticks_msec()
 	page = "death"
-	clear_ui()
-	panel(Rect2(0, 0, 640, 360), Color(0.025, 0.035, 0.07, 0.90))
-	label_at("IŞIK HENÜZ SÖNMEDİ", Vector2(130, 100), 27)
-	label_at("Son sunaktan tekrar dene. Saldırının geliş yönüne dikkat et.", Vector2(110, 156), 13, MUTE)
-	button("SON SUNAKTAN DEVAM", Vector2(210, 210), func():
-		get_tree().paused = false
-		world.restart_room()
-		apply_player_settings()
-		if not world.player.combat_event.is_connected(audio.play_effect): world.player.combat_event.connect(audio.play_effect)
-		show_hud()).grab_focus()
-	button("ANA MENÜ", Vector2(210, 249), show_menu)
+	var shade := panel(Rect2(0, 0, 640, 360), Color(0.025, 0.035, 0.07, 0.6))
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var text := label_at("ÖLDÜN — R / tık: tekrar", Vector2(120, 150), 26, PALE, 400)
+	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+func death_elapsed() -> float:
+	return (Time.get_ticks_msec() - death_ms) / 1000.0
+
+func restart_room() -> void:
+	if not is_instance_valid(world): return
+	world.restart_room()
+	hook_player()
+	show_hud()
 
 func bar(pos: Vector2, size: Vector2, color: Color) -> ProgressBar:
 	var b := ProgressBar.new()
@@ -258,20 +288,19 @@ func show_hud() -> void:
 	page = "game"
 	clear_ui()
 	hud = ui
-	panel(Rect2(8, 8, 178, 57), Color(0.03, 0.05, 0.09, 0.88))
-	label_at("CAN", Vector2(14, 10), 9, MUTE)
-	label_at("DİRENÇ", Vector2(14, 26), 9, MUTE)
-	label_at("PRİZMA", Vector2(14, 42), 9, MUTE)
-	health_bar = bar(Vector2(58, 14), Vector2(119, 7), Color("e87d91"))
-	stamina_bar = bar(Vector2(58, 30), Vector2(119, 7), TEAL)
-	energy_bar = bar(Vector2(58, 46), Vector2(119, 7), Color("c5a0ee"))
-	status_label = label_at("", Vector2(14, 69), 11, PALE)
+	panel(Rect2(8, 8, 140, 58), Color(0.03, 0.05, 0.09, 0.88))
+	time_label = label_at("0.00", Vector2(14, 8), 18, PALE, 120)
+	death_label = label_at("Ölüm: %d" % int(progress.get("total_deaths", 0)), Vector2(14, 32), 11, MUTE, 120)
+	meter_bar = bar(Vector2(14, 53), Vector2(128, 6), TEAL)
+	meter_bar.max_value = PrismTimeControl.MAX_METER
+	meter_bar.value = PrismTimeControl.MAX_METER
 	objective_label = label_at("", Vector2(14, 327), 11, TEAL, 612)
 	boss_name = label_at("", Vector2(216, 9), 11, PALE, 400)
 	boss_bar = bar(Vector2(216, 29), Vector2(408, 5), Color("d49ce9"))
 	boss_bar.visible = false
 
 func show_pause() -> void:
+	reset_time()
 	get_tree().paused = true
 	page = "pause"
 	clear_ui()
@@ -280,61 +309,20 @@ func show_pause() -> void:
 	button("DEVAM ET", Vector2(210, 114), show_hud).grab_focus()
 	button("AYARLAR", Vector2(210, 153), func(): show_settings("pause"))
 	button("KONTROLLER", Vector2(210, 192), show_controls)
-	button("KAYDET VE ANA MENÜ", Vector2(210, 231), func(): save_progress(); show_menu())
-	label_at("Kayıt, son sunaktan devam eder.", Vector2(210, 280), 11, MUTE)
+	button("ANA MENÜ", Vector2(210, 231), show_menu)
+	label_at("Kayıt, oda tamamlanınca yazılır.", Vector2(210, 280), 11, MUTE)
 
-func show_altar() -> void:
-	if page == "altar": return
-	get_tree().paused = true
-	page = "altar"
-	clear_ui()
-	panel(Rect2(40, 42, 560, 275))
-	label_at("PRİZMA SUNAĞI", Vector2(66, 60), 25, TEAL)
-	var cost := 15 + int(progress.get("upgrades", 0)) * 10
-	label_at("İlerleme kaydedildi. Can ve direnç yenilendi.", Vector2(66, 105), 13)
-	label_at("Gelişim: %d" % [progress.get("upgrades", 0)], Vector2(66, 139), 13, MUTE)
-	var buy := button("DİRENÇ +12  /  %d PARÇA" % cost, Vector2(66, 182), func():
-		progress.upgrades = int(progress.get("upgrades", 0)) + 1
-		save_progress(); show_altar_refresh(), 300)
-	buy.disabled = true
-	button("YOLA DEVAM", Vector2(66, 228), show_hud, 300).grab_focus()
-
-func show_altar_refresh() -> void:
-	page = "game"
-	show_altar()
-
-func show_final_choice() -> void:
-	get_tree().paused = true
-	page = "choice"
-	clear_ui()
-	panel(Rect2(0, 0, 640, 360), INK)
-	label_at("KİMİN IŞIĞI OLACAKSIN?", Vector2(70, 60), 28)
-	label_at("Ruhun gücü artık tamam. Son karar sana ait.", Vector2(70, 117), 14, MUTE)
-	button("LANETİ KIR — EVE DÖN", Vector2(70, 179), func(): finish_game("a"), 490).grab_focus()
-	button("PRİZMAYLA BİRLEŞ — ASTERRA'DA KAL", Vector2(70, 226), func(): finish_game("b"), 490)
-
-func finish_game(ending: String) -> void:
-	progress.ending = ending
-	progress["flags"] = progress.get("flags", {}); progress.flags["ending_" + ending] = true
-	Save.save_game(progress)
-	play_story("ending_" + ending, func(): show_ending_summary(ending))
-
-func show_ending_summary(ending: String) -> void:
-	get_tree().paused = true
-	page = "ending"
-	clear_ui()
-	panel(Rect2(0, 0, 640, 360), INK)
-	label_at("PRISMBOUND", Vector2(146, 61), 40)
-	label_at("LANETİ KIRMAK" if ending == "a" else "PRİZMAYLA BİRLEŞMEK", Vector2(146, 127), 21, TEAL)
-	label_at("Yolculuğa eşlik ettiğin için teşekkürler.\nTorimon / Geliştirme sürümü", Vector2(146, 176), 13, MUTE)
-	button("DİĞER KARARI GÖR", Vector2(146, 238), show_final_choice, 340).grab_focus()
-	button("ANA MENÜ", Vector2(146, 278), show_menu, 340)
+func play_story_once(key: String, done: Callable) -> void:
+	if skip_stories or seen_stories.has(key) or not stories.has(key): return
+	seen_stories[key] = true
+	play_story(key, done)
 
 func play_story(key: String, done: Callable) -> void:
 	dialogue_lines = stories.get(key, []).duplicate(true)
 	dialogue_index = 0
 	dialogue_done = done
 	if dialogue_lines.is_empty(): done.call(); return
+	reset_time()
 	get_tree().paused = true
 	page = "dialogue"
 	draw_dialogue()
@@ -344,16 +332,10 @@ func draw_dialogue() -> void:
 	panel(Rect2(0, 0, 640, 360), Color(0.02, 0.03, 0.06, 0.8))
 	label_at("A S T E R R A   /   %02d" % (dialogue_index + 1), Vector2(46, 48), 11, MUTE)
 	var line: Dictionary = dialogue_lines[dialogue_index]
-	label_at(str(line.speaker), Vector2(46, 105), 24, TEAL)
-	var body := label_at(str(line.text), Vector2(46, 153), 15, PALE, 548)
+	label_at(str(line.get("speaker", "")), Vector2(46, 105), 24, TEAL)
+	var body := label_at(str(line.get("text", "")), Vector2(46, 153), 15, PALE, 548)
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	if line.get("choice", "") == "pact":
-		button("ANLAŞMAYI KABUL EDİYORUM", Vector2(46, 265), next_dialogue, 310).grab_focus()
-		button("BEDELİ NEDİR?", Vector2(367, 265), func():
-			dialogue_lines.insert(dialogue_index + 1, {"speaker":"Prizma Ruhu", "text":"Elin başka bir silaha uzandığında lanet seni durduracak. Kalkan hem sınırın hem şansın olacak.\nYabancı: Yaşamak için başka yolum yoksa... kabul ediyorum."})
-			next_dialogue(), 226)
-	else:
-		button("DEVAM  →", Vector2(46, 277), next_dialogue, 220).grab_focus()
+	button("DEVAM  →", Vector2(46, 277), next_dialogue, 220).grab_focus()
 	label_at("Konuşmaları kendi hızında ilerlet.", Vector2(46, 325), 10, MUTE)
 
 func next_dialogue() -> void:
@@ -364,7 +346,9 @@ func next_dialogue() -> void:
 	else: draw_dialogue()
 
 func show_credits() -> void:
+	page = "credits"
 	clear_ui()
+	panel(Rect2(0, 0, 640, 360), INK)
 	label_at("TORIMON", Vector2(64, 53), 32, TEAL)
 	label_at("PRISMBOUND — özgün oyun dünyası\n\nGodot Engine / MIT lisansı (godotengine.org/license)\nKodla çizilen geçici piksel görseller\nÖzgün algoritmik geçici müzik ve ses tasarımı\nTürkçe hikâye ve arayüz\n\nÜçüncü taraf oyunlardan varlık alınmamıştır.\nTam sanat, müzik ve insan oynanış testleri sürmektedir.", Vector2(64, 108), 14)
 	button("GERİ", Vector2(64, 292), show_menu)
@@ -385,7 +369,7 @@ func show_settings(back: String) -> void:
 		var title := Label.new(); title.text = entry[1]; title.custom_minimum_size.x = 200; row.add_child(title)
 		var slider := HSlider.new(); slider.min_value = 0; slider.max_value = 1; slider.step = 0.05; slider.value = settings[entry[0]]; slider.custom_minimum_size.x = 300; row.add_child(slider)
 		slider.value_changed.connect(func(value: float): settings[entry[0]] = value; audio.apply(settings); apply_player_settings(); Save.save_settings(settings))
-	for entry in [["fullscreen", "Tam ekran"], ["vsync", "Dikey senkronizasyon"], ["assist", "Kolay yansıtma zamanlaması"], ["snap", "8 yönlü kalkan nişanı"]]:
+	for entry in [["fullscreen", "Tam ekran"], ["vsync", "Dikey senkronizasyon"], ["snap", "8 yönlü kalkan nişanı"]]:
 		var check := CheckButton.new(); check.text = entry[1]; check.button_pressed = settings[entry[0]]; box.add_child(check)
 		check.toggled.connect(func(value: bool): settings[entry[0]] = value; apply_display(); apply_player_settings(); Save.save_settings(settings))
 	var resolution := OptionButton.new()
@@ -406,8 +390,8 @@ func show_controls() -> void:
 	label_at("KONTROLLER", Vector2(24, 12), 23, TEAL)
 	var index := 0
 	for action in ACTION_LABELS:
-		var col := index / 6
-		var row := index % 6
+		var col := index / 5
+		var row := index % 5
 		var events := InputMap.action_get_events(action)
 		var event_text := events[0].as_text().replace(" (Physical)", "") if not events.is_empty() else "—"
 		var x := 24 + col * 310
@@ -420,7 +404,7 @@ func show_controls() -> void:
 		if is_instance_valid(world): show_pause()
 		else: show_settings("menu"), 160)
 	button("VARSAYILANLAR", Vector2(200, 318), func(): settings.bindings = {}; setup_input(); Save.save_settings(settings); show_controls(), 180)
-	label_at("Gamepad: sol çubuk hareket / sağ çubuk nişan", Vector2(24, 296), 10, MUTE)
+	label_at("Gamepad: sol çubuk hareket / sağ çubuk nişan / LT yavaşlat", Vector2(24, 296), 10, MUTE)
 
 func _input(event: InputEvent) -> void:
 	if not remap_action.is_empty() and event.is_pressed():
@@ -430,24 +414,36 @@ func _input(event: InputEvent) -> void:
 			var binding := {"type": "key" if event is InputEventKey else "mouse", "code": event.physical_keycode if event is InputEventKey else event.button_index}
 			settings.bindings[remap_action] = binding
 			Save.save_settings(settings); setup_input(); show_controls(); get_viewport().set_input_as_handled(); return
+	if page == "death" and death_elapsed() >= RESTART_DELAY:
+		if event.is_action_pressed("restart") or (event is InputEventMouseButton and event.pressed):
+			restart_room(); get_viewport().set_input_as_handled(); return
 	if event.is_action_pressed("pause") and is_instance_valid(world):
 		if page == "game": show_pause()
-		elif page == "pause" or page == "altar": show_hud()
+		elif page == "pause": show_hud()
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("restart") and page == "game" and is_instance_valid(world) and not world.transitioning:
+		restart_room(); get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
 	clock_time += delta
-	if page == "game" and is_instance_valid(world) and is_instance_valid(world.player) and is_instance_valid(health_bar):
-		var p: Node = world.player
-		status_label.text = "Prizma Kalkanı"
+	if page == "death" and death_elapsed() >= AUTO_RESTART:
+		restart_room()
+	if is_instance_valid(world): hook_player()
+	if is_instance_valid(toast_label) and Time.get_ticks_msec() > toast_until_ms:
+		toast_label.queue_free(); toast_label = null
+	if page == "game" and is_instance_valid(world) and is_instance_valid(world.room) and is_instance_valid(time_label):
+		time_label.text = "%.2f" % world.room.elapsed
+		death_label.text = "Ölüm: %d" % int(progress.get("total_deaths", 0))
+		meter_bar.value = world.time_control.meter
 		objective_label.text = world.objective
 		objective_label.visible = world.hint_timer <= 0
-		var boss_alive: bool = is_instance_valid(world.boss) and world.boss.hits_left > 0
+		var b: Node = world.boss
+		var boss_alive: bool = is_instance_valid(b) and b.hits_left > 0
 		boss_bar.visible = boss_alive
 		boss_name.visible = boss_alive
 		if boss_alive:
-			boss_bar.max_value = world.boss.BOSS_HITS[world.boss.region]; boss_bar.value = world.boss.hits_left; boss_name.text = world.boss.display_name
-		audio.set_region(world.chapter, boss_alive and p.position.x > 2400)
+			boss_bar.max_value = PrismEnemy.BOSS_HITS[b.region]; boss_bar.value = b.hits_left; boss_name.text = b.display_name
+		audio.set_region(world.chapter, boss_alive)
 	queue_redraw()
 
 func _draw() -> void:
@@ -469,6 +465,3 @@ func _draw() -> void:
 	draw_colored_polygon(PackedVector2Array([points[3], points[0], center]), Color("b1d7d3"))
 	for i in 4: draw_line(points[i], points[(i + 1) % 4], TEAL, 1)
 	draw_line(center + Vector2(-70, 104), center + Vector2(70, 104), Color("22394b"), 1)
-
-
-
