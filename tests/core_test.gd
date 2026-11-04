@@ -142,6 +142,148 @@ func test_time_reset() -> void:
 	tc.reset()
 	check(is_equal_approx(Engine.time_scale, 1.0) and not tc.active and is_equal_approx(tc.meter, 3.0), "Reset restores time and meter")
 
+func make_wall(x: float, y: float = 200.0, h: float = 200.0) -> StaticBody2D:
+	var body := StaticBody2D.new()
+	var cs := CollisionShape2D.new()
+	var rs := RectangleShape2D.new()
+	rs.size = Vector2(20, h)
+	cs.shape = rs
+	body.position = Vector2(x, y)
+	body.add_child(cs)
+	world.add_child(body)
+	return body
+
+func reset_player_for_shield() -> void:
+	player.dead = false
+	player.dash_timer = 0.0
+	player.hit_stop = 0.0
+	player.shield_out = false
+	player.position = Vector2(180, 300)
+	player.velocity = Vector2.ZERO
+	player.aim = Vector2.RIGHT
+
+func test_shield_bounces_and_returns() -> void:
+	reset_player_for_shield()
+	var caught_flag := [false]
+	player.try_throw()
+	check(player.shield_out, "Throw sets shield_out")
+	var s: PrismThrownShield = player.thrown_shield
+	s.caught.connect(func(): caught_flag[0] = true)
+	var bounced_left := false
+	var max_b := 0
+	for i in range(300):
+		await physics_frame
+		if caught_flag[0]:
+			break
+		max_b = maxi(max_b, s.bounces)
+		if s.bounces >= 1 and s.velocity.x < 0:
+			bounced_left = true
+	check(max_b >= 1, "Shield bounced off wall")
+	check(bounced_left, "Velocity flipped after wall hit")
+	check(caught_flag[0], "Shield caught")
+	check(not player.shield_out, "shield_out cleared on catch")
+
+func test_shield_max_bounces() -> void:
+	var left := make_wall(150.0, 100.0, 400.0)
+	var right := make_wall(250.0, 100.0, 400.0)
+	await physics_frame
+	var thrower := Node2D.new()
+	thrower.position = Vector2(200, 118)
+	world.add_child(thrower)
+	var s := PrismThrownShield.launch(world, Vector2(200, 100), Vector2.RIGHT, thrower)
+	var max_b := 0
+	var returning_at_three := false
+	for i in range(30):
+		await physics_frame
+		if not is_instance_valid(s) or s.is_queued_for_deletion():
+			break
+		max_b = maxi(max_b, s.bounces)
+		if s.bounces == 3 and s.returning:
+			returning_at_three = true
+		if s.returning:
+			break
+	check(max_b <= 3, "Bounces never exceed 3")
+	check(returning_at_three, "Returning at the 3rd bounce")
+	if is_instance_valid(s): s.free()
+	thrower.free()
+	left.free()
+	right.free()
+
+func test_shield_kills_each_enemy_once() -> void:
+	reset_player_for_shield()
+	var e1 := EnemyStub.new()
+	e1.position = Vector2(230, 282)
+	var e2 := EnemyStub.new()
+	e2.position = Vector2(265, 282)
+	world.add_child(e1)
+	world.add_child(e2)
+	player.try_throw()
+	var s: PrismThrownShield = player.thrown_shield
+	var alive_after_first := false
+	for i in range(300):
+		await physics_frame
+		if e1.causes.size() >= 1 and e2.causes.size() >= 1 and is_instance_valid(s) and not s.returning:
+			alive_after_first = true
+		if not player.shield_out:
+			break
+	check(e1.causes == ["shield"] and e2.causes == ["shield"], "Each enemy hit exactly once per throw")
+	check(alive_after_first, "Shield keeps flying after kills")
+	e1.free()
+	e2.free()
+
+func test_shield_recall() -> void:
+	reset_player_for_shield()
+	player.try_throw()
+	var s: PrismThrownShield = player.thrown_shield
+	await physics_frame
+	check(not s.returning, "Not returning right after throw")
+	player.try_throw()
+	check(s.returning, "Second throw press recalls")
+	for i in range(120):
+		await physics_frame
+		if not player.shield_out:
+			break
+	check(not player.shield_out, "Recalled shield caught")
+
+func test_shield_point_blank_wall() -> void:
+	reset_player_for_shield()
+	player.position = Vector2(280, 300)
+	player.try_throw()
+	var s: PrismThrownShield = player.thrown_shield
+	var frames := int((PrismThrownShield.OUT_TIME + 1.0) * 60.0)
+	for i in range(frames):
+		await physics_frame
+		if not player.shield_out:
+			break
+	check(not player.shield_out, "Point-blank wall throw caught in time")
+	check(not is_instance_valid(s) or s.is_queued_for_deletion(), "Point-blank shield freed")
+
+func test_throw_blocks_reflect_and_kill_frees() -> void:
+	reset_player_for_shield()
+	player.position = Vector2(100, 300)
+	player.try_throw()
+	var s: PrismThrownShield = player.thrown_shield
+	player.reflect_timer = 0.0
+	var p = shot(player.position + Vector2(60, -18), Vector2(-200, 0))
+	check(not player.handle_projectile(p), "Real throw blocks reflect")
+	p.free()
+	player.kill(Vector2(0, 0))
+	check(not player.shield_out, "kill clears shield_out")
+	await physics_frame
+	check(not is_instance_valid(s) or s.is_queued_for_deletion(), "kill frees own shield")
+	reset_player_for_shield()
+
+func run_shield_tests() -> void:
+	var wall := make_wall(300.0)
+	await physics_frame
+	await test_shield_bounces_and_returns()
+	await test_shield_max_bounces()
+	await test_shield_kills_each_enemy_once()
+	await test_shield_recall()
+	await test_shield_point_blank_wall()
+	await test_throw_blocks_reflect_and_kill_frees()
+	wall.free()
+
 func run() -> void:
 	for action in ["move_left", "move_right", "jump", "dash", "reflect", "throw", "slow", "restart", "interact", "pause", "aim_left", "aim_right", "aim_up", "aim_down"]:
 		if not InputMap.has_action(action): InputMap.add_action(action)
@@ -202,6 +344,7 @@ func run() -> void:
 	Input.action_release("dash")
 	check(player.dash_cooldown > 0 and player.state == "dash", "Dash input")
 	player.set_physics_process(false)
+	await run_shield_tests()
 	world.queue_free()
 	await process_frame
 	print("CORE TESTS: %d checks, %d failures" % [checks, failures])

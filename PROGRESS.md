@@ -6,7 +6,7 @@
 - [x] Spec kullanıcı onayı
 - [x] Uygulama planı: `docs/superpowers/plans/2026-11-04-katana-pivot.md` (8 görev) — onay bekliyor
 - [x] 1. Çekirdek: player/projectile sadeleştirme, tek vuruş, yansıtma (core_test 52/0; enemy_test eski mekanikler yüzünden 1 fail, Görev 4 yeniden yazar)
-- [ ] 2. Kalkan fırlatma + zaman yavaşlatma
+- [ ] 2. Kalkan fırlatma + zaman yavaşlatma (slow meter ✓, fırlatılan kalkan `scripts/thrown_shield.gd` ✓ core_test 79/0)
 - [ ] 3. Düşman sadeleştirme
 - [ ] 4. Oda sistemi + Orman bölümü
 - [ ] 5. HUD/skor/kayıt/diyalog

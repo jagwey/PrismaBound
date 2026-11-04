@@ -15,6 +15,7 @@ var snap_aim: bool = false
 var effects_intensity: float = 1.0
 var dead: bool = false
 var shield_out: bool = false
+var thrown_shield: PrismThrownShield = null
 var state: String = "idle"
 var reflect_timer: float = -1.0
 var reflect_cooldown: float = 0.0
@@ -71,6 +72,8 @@ func _physics_process(delta: float) -> void:
 		reflect_timer = 0.0
 		reflect_cooldown = REFLECT_COOLDOWN
 		combat_event.emit("reflect", global_position)
+	if Input.is_action_just_pressed("throw"):
+		try_throw()
 	if Input.is_action_just_pressed("jump"):
 		jump_buffer = 0.13
 	else:
@@ -151,9 +154,36 @@ func handle_projectile(projectile: Node) -> bool:
 	combat_event.emit("reflect", center)
 	return true
 
+func try_throw() -> void:
+	if dead:
+		return
+	if shield_out:
+		if is_instance_valid(thrown_shield):
+			thrown_shield.recall()
+		return
+	var center: Vector2 = global_position + Vector2(0, -18)
+	thrown_shield = PrismThrownShield.launch(get_parent(), center + aim * 20.0, aim, self)
+	thrown_shield.caught.connect(_on_shield_caught)
+	shield_out = true
+	combat_event.emit("throw", center)
+
+func _on_shield_caught() -> void:
+	shield_out = false
+	thrown_shield = null
+	combat_event.emit("catch", global_position + Vector2(0, -18))
+
+func _free_own_shield() -> void:
+	for node in get_tree().get_nodes_in_group("thrown_shields"):
+		if node.get("thrower") == self:
+			node.remove_from_group("thrown_shields")
+			node.queue_free()
+	thrown_shield = null
+	shield_out = false
+
 func kill(from: Vector2) -> void:
 	if dead or dash_timer > 0:
 		return
+	_free_own_shield()
 	dead = true
 	state = "death"
 	reflect_timer = -1.0
