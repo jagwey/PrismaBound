@@ -24,6 +24,9 @@ var absorb_enabled: bool = false
 var aim: Vector2 = Vector2.RIGHT
 var perfect_assist: bool = false
 var snap_aim: bool = false
+var effects_intensity: float = 1.0
+var burn_timer: float = 0.0
+var burn_tick: float = 0.0
 var dead: bool = false
 var state: String = "idle"
 var guard_broken: float = 0.0
@@ -100,6 +103,12 @@ func _physics_process(delta: float) -> void:
 		reflect_timer += delta
 		if reflect_timer > 0.28:
 			reflect_timer = -1.0
+	if burn_timer > 0:
+		burn_timer -= delta
+		burn_tick -= delta
+		if burn_tick <= 0:
+			burn_tick = 0.8
+			take_damage(2.0, global_position)
 	if poison_timer > 0:
 		poison_timer -= delta
 		poison_tick -= delta
@@ -211,7 +220,7 @@ func handle_projectile(projectile: Node) -> bool:
 	if absorb_enabled and Input.is_action_pressed("absorb") and stored_attacks.size() < storage_capacity and energy >= 10:
 		stored_attacks.append({"kind": projectile.kind, "element": projectile.element, "damage": projectile.damage, "speed": projectile.velocity.length(), "time": 18.0})
 		energy -= 10
-		projectile.consume()
+		projectile.consume(false)
 		combat_event.emit("absorb", center)
 		stats_changed.emit()
 		return true
@@ -256,7 +265,7 @@ func handle_projectile(projectile: Node) -> bool:
 	if stamina <= 0 or (projectile.kind == "heavy" and mode != 3 and mode != 5):
 		_break_guard()
 		return false
-	projectile.consume()
+	projectile.consume(false)
 	combat_event.emit("guard", center)
 	stats_changed.emit()
 	return true
@@ -309,16 +318,15 @@ func take_damage(amount: float, from: Vector2) -> void:
 		_die()
 
 func apply_status(element: String) -> void:
-	if dead or invulnerability > 0.74:
-		# Called directly after a successful hit, not while an older i-frame is active.
-		if dead: return
-	else:
-		return
+	# Caller must only apply on a successful health hit (not blocked/i-frame contact).
+	if dead: return
 	if element == "ice": slow_timer = 1.3
+	if element == "fire":
+		burn_timer = 2.4
+		burn_tick = 0.8
 	if element == "poison" or element == "nature":
 		poison_timer = 3
 		poison_tick = 1
-
 func _die() -> void:
 	if dead: return
 	dead = true
@@ -331,6 +339,7 @@ func heal() -> void:
 	stamina = max_stamina
 	guard_broken = 0
 	poison_timer = 0
+	burn_timer = 0
 	slow_timer = 0
 	invulnerability = 1
 	stats_changed.emit()
@@ -340,7 +349,7 @@ func add_shards(amount: int) -> void:
 	stats_changed.emit()
 
 func _draw() -> void:
-	if invulnerability > 0 and int(clock * 18) % 2 == 0 and flash <= 0:
+	if effects_intensity > 0.5 and invulnerability > 0 and int(clock * 18) % 2 == 0 and flash <= 0:
 		return
 	var body: Color = Color("304c69")
 	var cloak: Color = Color("80bfb9")
@@ -351,9 +360,9 @@ func _draw() -> void:
 		draw_rect(Rect2(-14, -7, 27, 6), body)
 		draw_rect(Rect2(8, -10, 8, 7), Color("dbc1ad"))
 		return
-	if state == "dash":
+	if state == "dash" and effects_intensity > 0:
 		for i in range(1, 4):
-			draw_rect(Rect2(-8 - dash_direction * float(i) * 9, -29, 16, 26), Color(tint, 0.12 * float(4 - i)))
+			draw_rect(Rect2(-8 - dash_direction * float(i) * 9, -29, 16, 26), Color(tint, 0.12 * float(4 - i) * effects_intensity))
 	draw_rect(Rect2(-8, -27 + bob, 16, 18), Color("121b30"))
 	draw_rect(Rect2(-6, -25 + bob, 12, 16), body)
 	draw_rect(Rect2(-7, -24 + bob, 14, 4), cloak)
@@ -380,11 +389,12 @@ func _draw() -> void:
 		draw_rect(Rect2(shield_center + Vector2(i - 1, i - 1), Vector2(2, 2)), Combat.MODE_COLORS[(i * 2 + int(clock * 2)) % 6])
 	if guarding or reflect_timer >= 0:
 		draw_arc(center, 27, aim.angle() - 0.85, aim.angle() + 0.85, 9, Color(tint, 0.8), 2)
-	if flash > 0:
-		draw_arc(center, 31 + (0.18 - flash) * 80, 0, TAU, 16, Color("fff2bf", flash * 4), 2)
+	if flash > 0 and effects_intensity > 0:
+		draw_arc(center, 31 + (0.18 - flash) * 80, 0, TAU, 16, Color("fff2bf", flash * 4 * effects_intensity), 2)
 	if guard_broken > 0:
 		draw_line(Vector2(-5, -45), Vector2(5, -39), Color("ff7968"), 2)
 		draw_line(Vector2(5, -45), Vector2(-5, -39), Color("ff7968"), 2)
 	for i in range(stored_attacks.size()):
 		draw_rect(Rect2(-5 + i * 7, -46, 4, 4), Combat.element_color(str(stored_attacks[i].element)))
+
 

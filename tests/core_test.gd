@@ -8,6 +8,13 @@ var checks: int = 0
 var world: Node2D
 var player: PrismPlayer
 
+class SplashTarget extends Node2D:
+	var hp: float = 100.0
+	var last_element: String = ""
+	func _ready() -> void: add_to_group("enemies")
+	func take_damage(amount: float, _from: Vector2, _perfect: bool = false) -> void: hp -= amount
+	func apply_status(element: String) -> void: last_element = element
+
 func _initialize() -> void:
 	call_deferred("run")
 
@@ -81,6 +88,53 @@ func run() -> void:
 	player.take_damage(10, Vector2.ZERO)
 	player.take_damage(10, Vector2.ZERO)
 	check(player.hp == 90, "I-frames prevent duplicate damage")
+	# Guarding or absorbing explosives must neutralize the blast entirely.
+	player.invulnerability = 0
+	player.hp = 100
+	player.stun_timer = 0
+	player.stamina = 100
+	player.guarding = true
+	p = shot(Vector2(125, 82), Vector2(-200, 0), "explosive")
+	check(player.handle_projectile(p) and player.hp == 100 and p.explosion_timer == 0, "Guard neutralizes explosive splash")
+	# Player-owned explosions affect nearby other enemies once, preserving element.
+	var primary := SplashTarget.new()
+	primary.position = Vector2(300, 80)
+	world.add_child(primary)
+	var secondary := SplashTarget.new()
+	secondary.position = Vector2(318, 80)
+	world.add_child(secondary)
+	var distant := SplashTarget.new()
+	distant.position = Vector2(400, 80)
+	world.add_child(distant)
+	p = shot(Vector2(300, 80), Vector2.RIGHT * 200, "explosive")
+	p.team = 1
+	p.element = "fire"
+	p.primary_hit = primary
+	p.consume()
+	check(primary.hp == 100, "Explosion excludes primary hit")
+	check(secondary.hp == 95 and secondary.last_element == "fire", "Reflected splash damage and status")
+	check(distant.hp == 100, "Explosion bounded radius")
+	p.consume()
+	check(secondary.hp == 95, "Explosion cannot hit twice")
+	primary.free()
+	secondary.free()
+	distant.free()
+	p.free()
+	player.apply_status("fire")
+	check(player.burn_timer > 0, "Fire applies finite burn")
+	player.apply_status("ice")
+	check(player.slow_timer > 0, "Ice applies slow")
+	player.heal()
+	check(player.burn_timer == 0 and player.slow_timer == 0, "Healing removes statuses")
+	# I-frames suppress both health loss and new elemental ailments.
+	player.guarding = false
+	player.position = Vector2(100, 100)
+	player.invulnerability = 0.5
+	p = shot(Vector2(80, 82), Vector2.RIGHT * 200)
+	p.element = "ice"
+	p._physics_process(0.1)
+	check(player.slow_timer == 0 and player.hp == 100, "Invulnerable contact applies no status")
+	player.effects_intensity = 0
 	# Real physics: floor, buffered input, airborne jump and gravity landing.
 	var floor_body := StaticBody2D.new()
 	var collision := CollisionShape2D.new()
@@ -116,3 +170,5 @@ func run() -> void:
 	await process_frame
 	print("CORE TESTS: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures else 0)
+
+
