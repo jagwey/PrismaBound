@@ -28,7 +28,10 @@ static func load_rooms(path: String = "res://data/rooms.json") -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}
 	var raw: String = FileAccess.get_file_as_string(path).trim_prefix("﻿")
-	var parsed: Variant = JSON.parse_string(raw)
+	var json := JSON.new()
+	if json.parse(raw) != OK:
+		return {}
+	var parsed: Variant = json.data
 	if not parsed is Dictionary or not (parsed as Dictionary).get("chapters") is Array:
 		return {}
 	return parsed

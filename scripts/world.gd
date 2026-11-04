@@ -31,7 +31,8 @@ func configure(chapter_index: int, start_room: int = 0) -> void:
 	room_index = maxi(0, start_room)
 
 func _ready() -> void:
-	var regions: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/regions.json").trim_prefix("﻿"))
+	var json := JSON.new()
+	var regions: Variant = json.data if json.parse(FileAccess.get_file_as_string("res://data/regions.json").trim_prefix("﻿")) == OK else null
 	if regions is Array and (regions as Array).size() == 5:
 		info = regions[chapter]
 		for value in info["palette"]:
@@ -44,6 +45,9 @@ func _ready() -> void:
 	room_index = clampi(room_index, 0, _rooms.size() - 1)
 	_build_room(true)
 
+func _exit_tree() -> void:
+	time_control.reset()
+
 func _process(delta: float) -> void:
 	_clock += delta
 	var wants_slow: bool = InputMap.has_action("slow") and Input.is_action_pressed("slow") and not _dead
@@ -51,6 +55,8 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _build_room(announce: bool) -> void:
+	if _rooms.is_empty():
+		return
 	var data: Dictionary = _rooms[room_index]
 	_dead = false
 	var is_boss: bool = data.get("boss") != null

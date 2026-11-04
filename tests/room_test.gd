@@ -177,6 +177,20 @@ func test_focus_cases() -> void:
 	check(is_equal_approx(Engine.time_scale, 1.0), "restart restores time_scale")
 	check(is_equal_approx(world.time_control.meter, PrismTimeControl.MAX_METER), "restart refills meter")
 	drop_world()
+	# Freeing the world during slow-mo must not leak time_scale.
+	world = make_world(0)
+	await frames(1)
+	world.time_control.update(0.5, true)
+	check(is_equal_approx(Engine.time_scale, 0.3), "slow-mo active before free")
+	world.free()
+	world = null
+	check(is_equal_approx(Engine.time_scale, 1.0), "freeing world restores time_scale")
+	# restart on a world whose rooms failed to load must not crash
+	world = make_world(0)
+	world._rooms = []
+	world.restart_room()
+	check(world.room == null and world.player == null and world.boss == null, "restart with empty rooms is safe")
+	drop_world()
 	# Focus 2: thrown shield cleaned, fresh player.
 	world = make_world(0)
 	await frames(1)
