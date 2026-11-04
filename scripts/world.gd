@@ -15,7 +15,8 @@ var time_control: PrismTimeControl = PrismTimeControl.new()
 var boss_phase_checkpoint: int = 1
 var transitioning: bool = false
 var objective: String = ""
-var hint_timer: float = 0.0
+var load_error: String = ""
+var rooms_path: String = "res://data/rooms.json"
 var player: PrismPlayer:
 	get: return room.player if is_instance_valid(room) else null
 var boss: Node:
@@ -37,13 +38,26 @@ func _ready() -> void:
 		info = regions[chapter]
 		for value in info["palette"]:
 			palette.append(Color(str(value)))
-	var all: Dictionary = PrismRoom.load_rooms()
-	if all.is_empty() or (all["chapters"] as Array).size() <= chapter:
-		push_error("PRISMBOUND: oda verisi okunamadı")
+	var all: Dictionary = PrismRoom.load_rooms(rooms_path)
+	if all.is_empty() or (all["chapters"] as Array).size() <= chapter or not all["chapters"][chapter] is Array or (all["chapters"][chapter] as Array).is_empty():
+		_fail("Oda verisi okunamadı.")
 		return
+	for entry in all["chapters"][chapter]:
+		var problem: String = PrismRoom.validate_room(entry) if entry is Dictionary else "Oda kaydı geçersiz."
+		if not problem.is_empty():
+			_fail(problem)
+			return
 	_rooms = all["chapters"][chapter]
 	room_index = clampi(room_index, 0, _rooms.size() - 1)
 	_build_room(true)
+
+func is_ready() -> bool:
+	return load_error.is_empty() and not _rooms.is_empty()
+
+func _fail(reason: String) -> void:
+	load_error = reason
+	_rooms = []
+	push_error("PRISMBOUND: " + reason)
 
 func _exit_tree() -> void:
 	time_control.reset()

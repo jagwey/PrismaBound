@@ -96,7 +96,7 @@ static func reset_game() -> void:
 			DirAccess.remove_absolute(path)
 
 static func defaults() -> Dictionary:
-	return {"master": 0.8, "music": 0.5, "sfx": 0.75, "fullscreen": false, "resolution": 2, "vsync": true, "shake": 0.35, "effects": 0.6, "assist": false, "snap": false, "language": "tr", "bindings": {}}
+	return {"master": 0.8, "music": 0.5, "sfx": 0.75, "fullscreen": false, "resolution": 2, "vsync": true, "effects": 0.6, "snap": false, "bindings": {}}
 
 static func load_settings() -> Dictionary:
 	var result := defaults()
@@ -108,7 +108,7 @@ static func load_settings() -> Dictionary:
 				for key in result:
 					if data.has(key) and typeof(data[key]) == typeof(result[key]):
 						result[key] = data[key]
-	for key in ["master", "music", "sfx", "shake", "effects"]:
+	for key in ["master", "music", "sfx", "effects"]:
 		result[key] = clampf(float(result[key]), 0.0, 1.0)
 	result.resolution = clampi(int(result.resolution), 1, 3)
 	return result

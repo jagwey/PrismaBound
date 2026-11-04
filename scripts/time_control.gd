@@ -30,6 +30,11 @@ func update(real_delta: float, wants_slow: bool) -> float:
 	Engine.time_scale = scale
 	return scale
 
+## Stop slow-mo without touching the meter (pause, dialogue).
+func suspend() -> void:
+	active = false
+	Engine.time_scale = 1.0
+
 func reset() -> void:
 	meter = MAX_METER
 	active = false

@@ -38,6 +38,7 @@ var dialogue_done: Callable
 var remap_action := ""
 var settings_return := "menu"
 var notice := ""
+var rooms_path := "res://data/rooms.json"
 var boot_args := OS.get_cmdline_user_args()
 
 func _ready() -> void:
@@ -89,7 +90,7 @@ func setup_input() -> void:
 		var button := InputEventJoypadButton.new()
 		button.button_index = buttons[action]
 		InputMap.action_add_event(action, button)
-	var axes := {"move_left": [JOY_AXIS_LEFT_X, -1.0], "move_right": [JOY_AXIS_LEFT_X, 1.0], "slow": [JOY_AXIS_TRIGGER_LEFT, 1.0], "aim_left": [JOY_AXIS_RIGHT_X, -1.0], "aim_right": [JOY_AXIS_RIGHT_X, 1.0], "aim_up": [JOY_AXIS_RIGHT_Y, -1.0], "aim_down": [JOY_AXIS_RIGHT_Y, 1.0]}
+	var axes := {"move_left": [JOY_AXIS_LEFT_X, -1.0], "move_right": [JOY_AXIS_LEFT_X, 1.0], "slow": [JOY_AXIS_TRIGGER_LEFT, 1.0], "throw": [JOY_AXIS_TRIGGER_RIGHT, 1.0], "aim_left": [JOY_AXIS_RIGHT_X, -1.0], "aim_right": [JOY_AXIS_RIGHT_X, 1.0], "aim_up": [JOY_AXIS_RIGHT_Y, -1.0], "aim_down": [JOY_AXIS_RIGHT_Y, 1.0]}
 	for action in axes:
 		var axis := InputEventJoypadMotion.new()
 		axis.axis = axes[action][0]; axis.axis_value = axes[action][1]
@@ -152,6 +153,10 @@ func reset_time() -> void:
 	if is_instance_valid(world) and world.get("time_control") != null: world.time_control.reset()
 	Engine.time_scale = 1.0
 
+func suspend_time() -> void:
+	if is_instance_valid(world) and world.get("time_control") != null: world.time_control.suspend()
+	Engine.time_scale = 1.0
+
 func show_menu() -> void:
 	reset_time()
 	get_tree().paused = false
@@ -199,12 +204,17 @@ func start_world(area: int) -> void:
 	hooked_player = null
 	world = load("res://scripts/world.gd").new()
 	world.process_mode = Node.PROCESS_MODE_PAUSABLE
+	world.rooms_path = rooms_path
 	world.configure(area, 0)
 	world.chapter_completed.connect(on_chapter_completed)
 	world.room_completed.connect(on_room_completed)
 	world.story_requested.connect(on_story_requested)
 	world.player_died.connect(on_player_died)
 	add_child(world)
+	if not world.is_ready():
+		notice = "Oda verisi okunamadı."
+		show_menu()
+		return
 	hook_player()
 	audio.set_region(area)
 	show_hud()
@@ -290,7 +300,7 @@ func show_hud() -> void:
 	hud = ui
 	panel(Rect2(8, 8, 140, 58), Color(0.03, 0.05, 0.09, 0.88))
 	time_label = label_at("0.00", Vector2(14, 8), 18, PALE, 120)
-	death_label = label_at("Ölüm: %d" % int(progress.get("total_deaths", 0)), Vector2(14, 32), 11, MUTE, 120)
+	death_label = label_at("Ölüm: %d" % (world.deaths if is_instance_valid(world) else 0), Vector2(14, 32), 11, MUTE, 120)
 	meter_bar = bar(Vector2(14, 53), Vector2(128, 6), TEAL)
 	meter_bar.max_value = PrismTimeControl.MAX_METER
 	meter_bar.value = PrismTimeControl.MAX_METER
@@ -300,7 +310,7 @@ func show_hud() -> void:
 	boss_bar.visible = false
 
 func show_pause() -> void:
-	reset_time()
+	suspend_time()
 	get_tree().paused = true
 	page = "pause"
 	clear_ui()
@@ -322,7 +332,7 @@ func play_story(key: String, done: Callable) -> void:
 	dialogue_index = 0
 	dialogue_done = done
 	if dialogue_lines.is_empty(): done.call(); return
-	reset_time()
+	suspend_time()
 	get_tree().paused = true
 	page = "dialogue"
 	draw_dialogue()
@@ -404,7 +414,7 @@ func show_controls() -> void:
 		if is_instance_valid(world): show_pause()
 		else: show_settings("menu"), 160)
 	button("VARSAYILANLAR", Vector2(200, 318), func(): settings.bindings = {}; setup_input(); Save.save_settings(settings); show_controls(), 180)
-	label_at("Gamepad: sol çubuk hareket / sağ çubuk nişan / LT yavaşlat", Vector2(24, 296), 10, MUTE)
+	label_at("Gamepad: sol çubuk hareket / sağ çubuk nişan / LT yavaşlat / RT fırlat", Vector2(24, 296), 10, MUTE)
 
 func _input(event: InputEvent) -> void:
 	if not remap_action.is_empty() and event.is_pressed():
@@ -415,7 +425,7 @@ func _input(event: InputEvent) -> void:
 			settings.bindings[remap_action] = binding
 			Save.save_settings(settings); setup_input(); show_controls(); get_viewport().set_input_as_handled(); return
 	if page == "death" and death_elapsed() >= RESTART_DELAY:
-		if event.is_action_pressed("restart") or (event is InputEventMouseButton and event.pressed):
+		if event.is_action_pressed("restart") or (event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]):
 			restart_room(); get_viewport().set_input_as_handled(); return
 	if event.is_action_pressed("pause") and is_instance_valid(world):
 		if page == "game": show_pause()
@@ -433,10 +443,9 @@ func _process(delta: float) -> void:
 		toast_label.queue_free(); toast_label = null
 	if page == "game" and is_instance_valid(world) and is_instance_valid(world.room) and is_instance_valid(time_label):
 		time_label.text = "%.2f" % world.room.elapsed
-		death_label.text = "Ölüm: %d" % int(progress.get("total_deaths", 0))
+		death_label.text = "Ölüm: %d" % world.deaths
 		meter_bar.value = world.time_control.meter
 		objective_label.text = world.objective
-		objective_label.visible = world.hint_timer <= 0
 		var b: Node = world.boss
 		var boss_alive: bool = is_instance_valid(b) and b.hits_left > 0
 		boss_bar.visible = boss_alive

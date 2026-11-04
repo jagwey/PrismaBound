@@ -27,7 +27,6 @@ var age: float = 0.0
 var facing: float = -1.0
 var home: Vector2
 var target: Vector2
-var knock_velocity: Vector2 = Vector2.ZERO
 var _flash: float = 0.0
 var hit_guard: float = 0.0
 var _attack_time: float = 0.0
@@ -92,8 +91,6 @@ func _physics_process(delta: float) -> void:
 		facing = signf(_player.global_position.x - global_position.x)
 		if facing == 0.0:
 			facing = -1.0
-	position += knock_velocity * delta
-	knock_velocity = knock_velocity.move_toward(Vector2.ZERO, delta * 480.0)
 	position.x = clampf(position.x, home.x - 145.0, home.x + 145.0)
 	match state:
 		State.IDLE:
@@ -330,7 +327,6 @@ func _draw() -> void:
 	var tint: Color = PALETTES[region]
 	var scale_factor: float = 1.65 if is_boss else 1.0
 	var bob: float = roundf(sin(age * 3.0) * (3.0 if archetype == 4 else 1.0))
-	var transparency: float = 1.0
 	if state == State.DEAD:
 		for i in 9:
 			var angle: float = i * TAU / 9.0
@@ -338,10 +334,9 @@ func _draw() -> void:
 			draw_rect(Rect2(point.round(), Vector2(3, 3)), Color(tint, maxf(state_time / 0.55, 0)))
 		return
 	draw_set_transform(Vector2(0, bob), 0, Vector2.ONE * scale_factor)
-	tint.a = transparency
 	var body: Color = tint.darkened(0.6)
 	if _flash > 0:
-		body = Color(1, 1, 1, transparency)
+		body = Color(1, 1, 1)
 	draw_rect(Rect2(-12, -19, 24, 35), Color("0a101d"))
 	if is_boss:
 		# Each boss has a distinct silhouette, not just a palette swap.

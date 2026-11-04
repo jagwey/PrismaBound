@@ -41,6 +41,12 @@ func has_mouse(action: String, index: int) -> bool:
 			return true
 	return false
 
+func has_axis(action: String, axis: int) -> bool:
+	for e in InputMap.action_get_events(action):
+		if e is InputEventJoypadMotion and e.axis == axis:
+			return true
+	return false
+
 func cleanup_files() -> void:
 	for path in [PrismSave.PATH, PrismSave.BACKUP, PrismSave.PATH + ".tmp", PrismSave.SETTINGS]:
 		if FileAccess.file_exists(path):
@@ -59,6 +65,8 @@ func run() -> void:
 	await test_death()
 	await test_continue_v1()
 	await test_pause_slow()
+	await test_pause_keeps_meter()
+	await test_rooms_load_failure()
 	await test_ending()
 	Engine.time_scale = 1.0
 	main.free()
@@ -75,6 +83,8 @@ func test_input() -> void:
 	check(has_mouse("reflect", MOUSE_BUTTON_LEFT), "reflect LMB")
 	check(has_mouse("throw", MOUSE_BUTTON_RIGHT), "throw RMB")
 	check(has_key("slow", KEY_SHIFT), "slow Shift")
+	check(has_axis("throw", JOY_AXIS_TRIGGER_RIGHT), "gamepad throw on RT")
+	check(has_axis("slow", JOY_AXIS_TRIGGER_LEFT), "gamepad slow on LT")
 	check(has_key("restart", KEY_R) and has_key("interact", KEY_E) and has_key("pause", KEY_ESCAPE), "R/E/Esc defaults")
 	for action in ["guard", "bash", "mode", "absorb", "release"]:
 		check(not InputMap.has_action(action), "old action removed: " + action)
@@ -124,8 +134,22 @@ func test_death() -> void:
 	main._input(ev)
 	check(main.page == "death", "restart ignored before 0.3 s")
 	await wait_real(0.4)
+	var wheel := InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel.pressed = true
+	main._input(wheel)
+	check(main.page == "death", "wheel does not restart from death screen")
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	main._input(click)
+	check(main.page == "game", "left click restarts from death screen")
+	main.world.player.kill(Vector2.ZERO)
+	await frames(2)
+	await wait_real(0.4)
 	main._input(ev)
 	check(main.page == "game", "restart accepted after 0.3 s")
+	check(main.death_label.text == "Ölüm: %d" % main.world.deaths, "HUD shows chapter deaths")
 	check(main.hooked_player == main.world.player and not main.world.player.dead, "fresh player hooked after restart")
 	main.world.player.kill(Vector2.ZERO)
 	await frames(2)
@@ -155,6 +179,49 @@ func test_pause_slow() -> void:
 	Engine.time_scale = 0.3
 	main.show_menu()
 	check(Engine.time_scale == 1.0 and not is_instance_valid(main.world), "menu resets time scale")
+
+func test_pause_keeps_meter() -> void:
+	main.start_world(0)
+	await frames(1)
+	main.world.time_control.meter = 1.25
+	main.world.time_control.active = true
+	main.show_pause()
+	check(is_equal_approx(main.world.time_control.meter, 1.25), "pause does not refill meter")
+	check(not main.world.time_control.active and Engine.time_scale == 1.0, "pause suspends slow-mo")
+	main.show_hud()
+	check(is_equal_approx(main.world.time_control.meter, 1.25), "meter unchanged after resume")
+	main.play_story("region_0", main.show_hud)
+	check(is_equal_approx(main.world.time_control.meter, 1.25), "dialogue does not refill meter")
+	await skip_dialogue()
+
+func test_rooms_load_failure() -> void:
+	var bad_path := "user://test_bad_rooms.json"
+	var f := FileAccess.open(bad_path, FileAccess.WRITE)
+	f.store_string(JSON.stringify({"chapters": [[{"id": "broken", "size": [640, 360]}], [], [], [], []]}))
+	f.close()
+	var w: PrismWorld = PrismWorld.new()
+	w.rooms_path = bad_path
+	w.configure(0, 0)
+	root.add_child(w)
+	check(not w.is_ready() and not w.load_error.is_empty(), "invalid room data sets load_error")
+	w.free()
+	var w2: PrismWorld = PrismWorld.new()
+	w2.rooms_path = "user://does_not_exist.json"
+	root.add_child(w2)
+	check(not w2.is_ready() and not w2.load_error.is_empty(), "missing rooms file sets load_error")
+	w2.free()
+	var w3: PrismWorld = PrismWorld.new()
+	root.add_child(w3)
+	check(w3.is_ready() and w3.load_error.is_empty(), "real rooms.json loads and validates")
+	w3.free()
+	main.rooms_path = bad_path
+	main.start_world(0)
+	check(main.page == "menu" and not is_instance_valid(main.world), "load failure returns to menu")
+	check(main.notice == "Oda verisi okunamadı.", "load failure notice set")
+	check(not paused and Engine.time_scale == 1.0, "load failure leaves tree running")
+	main.rooms_path = "res://data/rooms.json"
+	main.notice = ""
+	DirAccess.remove_absolute(bad_path)
 
 func test_ending() -> void:
 	main.progress = PrismSave.fresh()

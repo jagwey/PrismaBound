@@ -4,7 +4,7 @@ Godot 4.7.2 / GDScript / Windows / Türkçe. Bu depo, Katana Zero tarzı tek vur
 
 ## Çalıştırma
 
-- Windows: `builds/PRISMBOUND.exe` dosyasını aç.
+- Windows: `builds/PRISMBOUND.exe` dosyasını aç. Not: bu exe pivot öncesi sürümdür; Godot 4.7.2 export şablonları kurulana kadar yenilenemiyor.
 - Düzenleme: Godot 4.7.2 ile `project.godot` dosyasını aç, F6 yerine F5 ile ana oyunu başlat.
 - Bağımlılık: Godot dışında ek paket gerekmez; Windows çalıştırılabilir dosyası motor kurulumunu gerektirmez.
 
@@ -12,11 +12,11 @@ Godot 4.7.2 / GDScript / Windows / Türkçe. Bu depo, Katana Zero tarzı tek vur
 
 A/D hareket; Space zıplama; Sol Ctrl atılma. Sol fare yansıtma (mermi yaklaşırken); sağ fare kalkan fırlatma (fare yönüne). Shift basılı tutulunca zaman yavaşlar. R odayı yeniler (öldükten sonra da R veya tık). E etkileşim. Esc duraklatır. Ayarlardan klavye ve fare atamalarını değiştirebilirsin.
 
-Gamepad: sol analog hareket, sağ analog nişan, RB yansıtma, LB fırlatma, LT yavaşlatma, A zıplama, B atılma, X etkileşim, Y odayı yenile, Start duraklatma. Fiziksel gamepad testi henüz yapılmadı.
+Gamepad: sol analog hareket, sağ analog nişan, RB yansıtma, RT fırlatma (LB de fırlatır), LT yavaşlatma, A zıplama, B atılma, X etkileşim, Y odayı yenile, Start duraklatma. Fiziksel gamepad testi henüz yapılmadı.
 
 ## Oynanış
 
-Tek vuruşta ölürsün; düşmanlar da öyle. Mermiyi tam zamanında yansıt, kalkanı fırlat, yakala, gerekirse zamanı yavaşlat. Her oda tek ekran: tüm düşmanları temizle, çıkışa git. Süre ve en iyi süre gösterilir. Bölüm sonunda çok vuruşlu boss var. Şu an oynanabilir bölüm: Orman (5 oda + boss); diğer bölümlerin odaları `data/rooms.json` içinde.
+Tek vuruşta ölürsün; düşmanlar da öyle. Mermiyi tam zamanında yansıt, kalkanı fırlat, yakala, gerekirse zamanı yavaşlat. Her oda tek ekran: tüm düşmanları temizle, çıkışa git. Süre ve en iyi süre gösterilir. Bölüm sonunda çok vuruşlu boss var. Beş bölümün tamamı oynanabilir (Orman, Maden, Kale, Tapınak, Prizma; her biri 5 oda + boss), odalar `data/rooms.json` içinde.
 
 ## Kayıt
 
