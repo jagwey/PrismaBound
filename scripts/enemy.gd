@@ -9,6 +9,7 @@ enum State { IDLE, PATROL, DETECT, TELEGRAPH, ATTACK, RECOVER, STUNNED, DEAD }
 const NAMES := ["Orman Nişancısı", "Aldatıcı Büyücü", "Kristal Okçu", "Demir Muhafız", "Işın Gözü", "", "Çılgın Savaşçı"]
 const TYPE_IDS := {"shooter": 0, "feint": 1, "spread": 2, "armored": 3, "beam": 4, "melee": 6}
 const BOSS_HITS := [3, 4, 4, 5, 5]
+const BOSS_HIT_GUARD := 0.25
 const BOSSES := ["ORMAN MUHAFIZI", "KRİSTAL GOLEM", "KIZIL ŞÖVALYE", "KÖR KÂHİN", "PRİZMA'NIN YANSIMASI"]
 const PALETTES := [Color("71cba6"), Color("af8fe9"), Color("ee795e"), Color("c087e8"), Color("bcebef")]
 
@@ -28,6 +29,7 @@ var home: Vector2
 var target: Vector2
 var knock_velocity: Vector2 = Vector2.ZERO
 var _flash: float = 0.0
+var hit_guard: float = 0.0
 var _attack_time: float = 0.0
 var _next_shot: float = 0.0
 var _shot_count: int = 0
@@ -74,6 +76,7 @@ func _physics_process(delta: float) -> void:
 	age += delta
 	state_time -= delta
 	_flash = maxf(0.0, _flash - delta)
+	hit_guard = maxf(0.0, hit_guard - delta)
 	if state == State.DEAD:
 		if state_time <= 0.0:
 			queue_free()
@@ -292,6 +295,9 @@ func hit_by(_source: Node, from: Vector2, cause: String) -> bool:
 	if not is_boss:
 		_die()
 		return true
+	if hit_guard > 0.0:
+		return false
+	hit_guard = BOSS_HIT_GUARD
 	hits_left -= 1
 	_flash = 0.13
 	if hits_left <= 0:

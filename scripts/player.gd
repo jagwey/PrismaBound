@@ -160,7 +160,10 @@ func try_throw() -> void:
 	if shield_out:
 		if is_instance_valid(thrown_shield):
 			thrown_shield.recall()
-		return
+			return
+		# The shield vanished without `caught`: recover instead of staying stuck.
+		shield_out = false
+		thrown_shield = null
 	var center: Vector2 = global_position + Vector2(0, -18)
 	thrown_shield = PrismThrownShield.launch(get_parent(), center + aim * 20.0, aim, self)
 	thrown_shield.caught.connect(_on_shield_caught)

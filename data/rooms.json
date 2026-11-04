@@ -1,0 +1,22 @@
+{"chapters":[
+  [
+    {"id":"forest_1","size":[640,360],"spawn":[60,320],"exit":[600,320],"solids":[[0,320,640,40],[180,276,80,10],[330,236,80,10]],"enemies":[{"type":"shooter","pos":[480,302],"facing":-1}],"boss":null},
+    {"id":"forest_2","size":[640,360],"spawn":[60,320],"exit":[600,320],"solids":[[0,320,640,40],[200,280,70,10],[300,240,70,10]],"enemies":[{"type":"feint","pos":[500,302],"facing":-1}],"boss":null},
+    {"id":"forest_3","size":[640,360],"spawn":[60,320],"exit":[600,320],"solids":[[0,320,640,40],[160,280,70,10],[360,270,60,10]],"enemies":[{"type":"spread","pos":[520,302],"facing":-1}],"boss":null},
+    {"id":"forest_4","size":[640,360],"spawn":[60,320],"exit":[600,320],"solids":[[0,320,640,40],[160,276,80,10],[420,250,60,10],[260,236,60,10]],"enemies":[{"type":"armored","pos":[520,302],"facing":-1}],"boss":null},
+    {"id":"forest_5","size":[640,360],"spawn":[60,320],"exit":[600,320],"solids":[[0,320,640,40],[140,276,70,10],[380,246,70,10],[500,276,60,10]],"enemies":[{"type":"melee","pos":[300,302],"facing":-1},{"type":"shooter","pos":[480,302],"facing":-1},{"type":"spread","pos":[560,302],"facing":-1}],"boss":null},
+    {"id":"forest_boss","size":[640,360],"spawn":[60,320],"exit":[600,320],"solids":[[0,320,640,40],[150,270,80,10],[300,230,80,10],[450,270,80,10]],"enemies":[],"boss":0}
+  ],
+  [
+    {"id":"crystal_placeholder","size":[640,360],"spawn":[60,320],"exit":[600,320],"solids":[[0,320,640,40],[200,276,80,10],[360,236,80,10]],"enemies":[{"type":"feint","pos":[480,302],"facing":-1}],"boss":null}
+  ],
+  [
+    {"id":"fortress_placeholder","size":[640,360],"spawn":[60,320],"exit":[600,320],"solids":[[0,320,640,40],[200,276,80,10],[360,236,80,10]],"enemies":[{"type":"armored","pos":[480,302],"facing":-1}],"boss":null}
+  ],
+  [
+    {"id":"temple_placeholder","size":[640,360],"spawn":[60,320],"exit":[600,320],"solids":[[0,320,640,40],[200,276,80,10],[360,236,80,10]],"enemies":[{"type":"spread","pos":[480,302],"facing":-1}],"boss":null}
+  ],
+  [
+    {"id":"prism_placeholder","size":[640,360],"spawn":[60,320],"exit":[600,320],"solids":[[0,320,640,40],[200,276,80,10],[360,236,80,10]],"enemies":[{"type":"beam","pos":[480,302],"facing":-1}],"boss":null}
+  ]
+]}

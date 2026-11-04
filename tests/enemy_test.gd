@@ -129,6 +129,7 @@ func run() -> void:
 		var half: int = ceili(total / 2.0)
 		var expected_phase_hit: int = half
 		for n in range(1, total + 1):
+			boss.hit_guard = 0.0
 			var ok: bool = boss.hit_by(stub, behind, "reflect")
 			check(ok, "Boss hit %d accepted region %s" % [n, area])
 			if n < total:
@@ -142,11 +143,18 @@ func run() -> void:
 		else:
 			check(phases == [2], "Boss single phase change region %s: %s" % [area, str(phases)])
 		check(boss.state == boss.State.DEAD and defeats == 1 and not boss.is_in_group("enemies"), "Boss dies after exactly BOSS_HITS region %s" % area)
+		boss.hit_guard = 0.0
 		check(not boss.hit_by(stub, behind, "reflect"), "Dead boss ignores hits %s" % area)
 		boss.free()
 		var resumed := make_enemy(0, area, true, 2)
 		check(resumed.hits_left == total - half and resumed.phase == 2, "start_phase 2 hits_left region %s" % area)
 		resumed.free()
+	var guarded := make_enemy(0, 0, true)
+	check(guarded.hit_by(stub, behind, "reflect") and guarded.hits_left == 2, "Guard: first boss hit lands")
+	check(not guarded.hit_by(stub, behind, "reflect") and guarded.hits_left == 2, "Guard: same-frame second hit rejected")
+	guarded.hit_guard = 0.0
+	check(guarded.hit_by(stub, behind, "reflect") and guarded.hits_left == 1, "Guard: hit lands again after 0.25 s")
+	guarded.free()
 	var final3 := make_enemy(0, 4, true, 3)
 	check(final3.hits_left == 1 and final3.phase == 3, "Final boss start_phase 3")
 	final3.free()

@@ -179,9 +179,9 @@ func start_world(area: int) -> void:
 	progress.unlocked = maxi(int(progress.get("unlocked", 0)), area)
 	world = load("res://scripts/world.gd").new()
 	world.process_mode = Node.PROCESS_MODE_PAUSABLE
-	world.configure(area, progress)
-	world.region_completed.connect(on_region_completed)
-	world.checkpoint_reached.connect(on_checkpoint)
+	world.configure(area, 0)
+	world.chapter_completed.connect(on_region_completed)
+	world.room_completed.connect(on_room_completed)
 	world.story_requested.connect(on_story_requested)
 	world.player_died.connect(on_player_died)
 	add_child(world)
@@ -203,15 +203,12 @@ func apply_player_settings() -> void:
 
 func save_progress() -> void:
 	if is_instance_valid(world) and is_instance_valid(world.player):
-		progress["flags"] = progress.get("flags", {}); progress.flags["checkpoint_region"] = world.region
-		progress.flags["checkpoint_id"] = world.checkpoint_id
+		progress["flags"] = progress.get("flags", {}); progress.flags["checkpoint_region"] = world.chapter
+		progress.flags["checkpoint_id"] = world.room_index
 	if not Save.save_game(progress): notice = "Kayıt yazılamadı. Klasör erişimini kontrol et."
 
-func on_checkpoint(area: int) -> void:
-	progress.region = area
-	save_progress()
+func on_room_completed(_room_id: String, _time: float) -> void:
 	audio.play_effect("checkpoint")
-	show_altar()
 
 func on_story_requested(key: String) -> void:
 	if stories.has(key) and not progress.get("flags", {}).get(key, false):
@@ -240,7 +237,7 @@ func on_player_died() -> void:
 	label_at("Son sunaktan tekrar dene. Saldırının geliş yönüne dikkat et.", Vector2(110, 156), 13, MUTE)
 	button("SON SUNAKTAN DEVAM", Vector2(210, 210), func():
 		get_tree().paused = false
-		world.restart_checkpoint()
+		world.restart_room()
 		apply_player_settings()
 		if not world.player.combat_event.is_connected(audio.play_effect): world.player.combat_event.connect(audio.play_effect)
 		show_hud()).grab_focus()
@@ -450,7 +447,7 @@ func _process(delta: float) -> void:
 		boss_name.visible = boss_alive
 		if boss_alive:
 			boss_bar.max_value = world.boss.BOSS_HITS[world.boss.region]; boss_bar.value = world.boss.hits_left; boss_name.text = world.boss.display_name
-		audio.set_region(world.region, boss_alive and p.position.x > 2400)
+		audio.set_region(world.chapter, boss_alive and p.position.x > 2400)
 	queue_redraw()
 
 func _draw() -> void:
