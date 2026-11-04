@@ -87,6 +87,19 @@ func run() -> void:
 	write_raw(Save.PATH, JSON.stringify({"version": 1, "region": 1, "unlocked": 2, "upgrades": 0, "shards": 0}))
 	check(int(Save.load_game().unlocked_chapter) == 2, "v1 file migrated on load")
 
+	# unrecognized-but-parsable main must fall through to backup
+	write_raw(Save.BACKUP, JSON.stringify(rt))
+	for junk in ["{}", "{\"foo\":1}", "{\"version\":3}", "{\"version\":1,\"unlocked\":\"x\"}"]:
+		write_raw(Save.PATH, junk)
+		check(Save.load_game() == rt, "junk main falls to backup: " + junk)
+	check(Save.migrate({}).is_empty() and Save.migrate({"version": 3}).is_empty(), "migrate rejects unknown")
+	var nan_d := Save.fresh()
+	nan_d.best_times = {"r": NAN}
+	check(not Save.valid(nan_d), "NaN time invalid")
+	nan_d.best_times = {"r": INF}
+	check(not Save.valid(nan_d), "inf time invalid")
+	check(not Save.record_room(Save.fresh(), "r", NAN).best_times.has("r"), "record ignores NaN")
+
 	cleanup()
 	print("SAVE TESTS: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures else 0)

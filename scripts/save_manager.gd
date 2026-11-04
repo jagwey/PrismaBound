@@ -22,21 +22,28 @@ static func valid(data: Variant) -> bool:
 	if not data.get("best_times") is Dictionary:
 		return false
 	for room in data.best_times:
-		if not _is_num(data.best_times[room]) or float(data.best_times[room]) <= 0.0:
+		if not _is_num(data.best_times[room]) or not is_finite(float(data.best_times[room])) or float(data.best_times[room]) <= 0.0:
 			return false
 	return true
 
 static func migrate(data: Dictionary) -> Dictionary:
-	if data.has("version") and _is_num(data.version) and int(data.version) == 2:
+	if not data.has("version") or not _is_num(data.version):
+		return {}
+	var version := int(data.version)
+	if version == 2:
 		return data
+	if version != 1:
+		return {}
 	var result := fresh()
-	if data.has("unlocked") and _is_num(data.unlocked):
+	if data.has("unlocked"):
+		if not _is_num(data.unlocked):
+			return {}
 		result.unlocked_chapter = clampi(int(data.unlocked), 0, 4)
 	return result
 
 static func record_room(data: Dictionary, room_id: String, time: float) -> Dictionary:
 	var result := data.duplicate(true)
-	if time <= 0.0:
+	if not is_finite(time) or time <= 0.0:
 		return result
 	var times: Dictionary = result.get("best_times", {})
 	if not times.has(room_id) or time < float(times[room_id]):
