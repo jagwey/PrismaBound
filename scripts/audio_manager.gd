@@ -27,14 +27,13 @@ func play_effect(event: String, _position: Vector2 = Vector2.ZERO) -> void:
 	var pitch := 440.0
 	var length := 0.13
 	match event:
-		"perfect", "perfect_reflect": pitch = 1174.66; length = 0.3
 		"reflect": pitch = 783.99; length = 0.2
+		"throw": pitch = 523.25; length = 0.16
+		"catch": pitch = 880.0; length = 0.12
+		"death": pitch = 92.5; length = 0.4
 		"jump": pitch = 330.0
 		"dash": pitch = 180.0
-		"damage", "hurt", "guard_break": pitch = 92.5; length = 0.22
-		"bash": pitch = 146.8
 		"checkpoint", "victory": pitch = 659.25; length = 0.45
-		"guard": pitch = 220.0
 		"step", "footstep": pitch = 70.0; length = 0.045
 	if not samples.has(event):
 		samples[event] = tone(pitch, length)
@@ -102,3 +101,9 @@ func compose(region: int, boss_music: bool) -> AudioStreamWAV:
 	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	stream.loop_end = count
 	return stream
+
+func _exit_tree() -> void:
+	if is_instance_valid(music_player): music_player.stop()
+	for voice in voices:
+		if is_instance_valid(voice): voice.stop()
+	samples.clear()

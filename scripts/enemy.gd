@@ -6,15 +6,17 @@ signal defeated(enemy)
 signal phase_changed(phase: int)
 
 enum State { IDLE, PATROL, DETECT, TELEGRAPH, ATTACK, RECOVER, STUNNED, DEAD }
-const NAMES := ["Orman Nişancısı", "Aldatıcı Büyücü", "Kristal Okçu", "Demir Muhafız", "Işın Gözü", "Gölge Hayalet", "Çılgın Savaşçı"]
+const NAMES := ["Orman Nişancısı", "Aldatıcı Büyücü", "Kristal Okçu", "Demir Muhafız", "Işın Gözü", "", "Çılgın Savaşçı"]
+const TYPE_IDS := {"shooter": 0, "feint": 1, "spread": 2, "armored": 3, "beam": 4, "melee": 6}
+const BOSS_HITS := [3, 4, 4, 5, 5]
+const BOSS_HIT_GUARD := 0.25
 const BOSSES := ["ORMAN MUHAFIZI", "KRİSTAL GOLEM", "KIZIL ŞÖVALYE", "KÖR KÂHİN", "PRİZMA'NIN YANSIMASI"]
 const PALETTES := [Color("71cba6"), Color("af8fe9"), Color("ee795e"), Color("c087e8"), Color("bcebef")]
 
 var archetype: int = 0
 var region: int = 0
 var is_boss: bool = false
-var hp: float = 48.0
-var max_hp: float = 48.0
+var hits_left: int = 0
 var display_name: String = NAMES[0]
 var hurt_radius: float = 15.0
 var state: State = State.IDLE
@@ -25,30 +27,41 @@ var age: float = 0.0
 var facing: float = -1.0
 var home: Vector2
 var target: Vector2
-var knock_velocity: Vector2 = Vector2.ZERO
-var _hit_cooldown: float = 0.0
 var _flash: float = 0.0
+var hit_guard: float = 0.0
 var _attack_time: float = 0.0
 var _next_shot: float = 0.0
 var _shot_count: int = 0
 var _feint: bool = false
 var _death_emitted: bool = false
-var _reflection_cooldown: float = 0.0
 var _player: Node2D
-var slow_timer: float = 0.0
-var burn_timer: float = 0.0
-var poison_timer: float = 0.0
-var _status_tick: float = 0.0
-var _decoys: Array[Dictionary] = []
 
-func configure(type: int, area: int, boss: bool = false) -> void:
-	archetype = clampi(type, 0, 6)
+func configure(type: int, area: int, boss: bool = false, start_phase: int = 1) -> void:
+	archetype = type if TYPE_IDS.values().has(type) else 0
 	region = clampi(area, 0, 4)
 	is_boss = boss
-	max_hp = (240.0 + region * 35.0) if boss else [40.0, 42.0, 48.0, 76.0, 50.0, 48.0, 65.0][archetype]
-	hp = max_hp
 	hurt_radius = 27.0 if boss else 16.0
 	display_name = BOSSES[region] if boss else NAMES[archetype]
+	if boss:
+		phase = clampi(start_phase, 1, 3 if region == 4 else 2)
+		hits_left = _hits_for_phase(phase)
+	else:
+		phase = 1
+		hits_left = 1
+
+func _hits_for_phase(p: int) -> int:
+	var total: int = BOSS_HITS[region]
+	if p >= 3 and region == 4:
+		return 1
+	if p == 2:
+		return total - ceili(total / 2.0)
+	return total
+
+func phase_for_hits(hits: int) -> int:
+	var total: int = BOSS_HITS[region]
+	if region == 4 and hits == 1:
+		return 3
+	return 2 if total - hits >= ceili(total / 2.0) else 1
 
 func _ready() -> void:
 	add_to_group("enemies")
@@ -60,22 +73,9 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	age += delta
-	state_time -= delta * (0.7 if slow_timer > 0.0 else 1.0)
-	slow_timer = maxf(0.0, slow_timer - delta)
-	burn_timer = maxf(0.0, burn_timer - delta)
-	poison_timer = maxf(0.0, poison_timer - delta)
-	_status_tick -= delta
-	if state != State.DEAD and (burn_timer > 0.0 or poison_timer > 0.0) and _status_tick <= 0.0:
-		_status_tick = 0.7
-		take_damage(2.0, global_position - Vector2(facing * 20, 0))
-	for i in range(_decoys.size() - 1, -1, -1):
-		_decoys[i]["position"] += _decoys[i]["velocity"] * delta
-		_decoys[i]["life"] -= delta
-		if float(_decoys[i]["life"]) <= 0.0:
-			_decoys.remove_at(i)
-	_hit_cooldown = maxf(0.0, _hit_cooldown - delta)
+	state_time -= delta
 	_flash = maxf(0.0, _flash - delta)
-	_reflection_cooldown = maxf(0.0, _reflection_cooldown - delta)
+	hit_guard = maxf(0.0, hit_guard - delta)
 	if state == State.DEAD:
 		if state_time <= 0.0:
 			queue_free()
@@ -91,8 +91,6 @@ func _physics_process(delta: float) -> void:
 		facing = signf(_player.global_position.x - global_position.x)
 		if facing == 0.0:
 			facing = -1.0
-	position += knock_velocity * delta
-	knock_velocity = knock_velocity.move_toward(Vector2.ZERO, delta * 480.0)
 	position.x = clampf(position.x, home.x - 145.0, home.x + 145.0)
 	match state:
 		State.IDLE:
@@ -122,7 +120,8 @@ func _physics_process(delta: float) -> void:
 					_attack_time = 0.0
 		State.ATTACK:
 			_attack_time += delta
-			_next_shot -= delta * (0.7 if slow_timer > 0.0 else 1.0)
+			_next_shot -= delta
+			_contact_check()
 			if _next_shot <= 0.0:
 				_attack_tick()
 			if state_time <= 0.0:
@@ -164,27 +163,24 @@ func _enemy_attack() -> void:
 	match archetype:
 		0:
 			if _shot_count == 0:
-				_shoot(direction * 150.0, "normal", "nature")
+				_shoot(direction * 150.0, "normal")
 		1:
 			if _shot_count == 0:
-				_shoot(direction * 175.0, "arc", "ice")
+				_shoot(direction * 175.0, "arc")
 		2:
 			if _shot_count < 2:
-				_spread(direction, 175.0, 3, 0.16, "spread", "ice", 8.0)
+				_spread(direction, 175.0, 3, 0.16, "spread")
 		3:
 			if _shot_count == 0:
-				_shoot(direction * 120.0, "heavy", "fire", 22.0)
+				_shoot(direction * 120.0, "heavy")
 		4:
 			# Closely spaced visible beam segments: no invisible ray damage.
 			_next_shot = 0.10
-			_shoot(direction * 245.0, "beam", "neutral", 5.0)
-		5:
-			if _shot_count == 0:
-				_spread(direction, 130.0, 2, 0.12, "dark", "spirit", 13.0)
+			_shoot(direction * 245.0, "beam")
 		6:
 			if _shot_count == 0:
 				position.x = move_toward(position.x, target.x, 46.0)
-				_melee(46.0, 18.0)
+				_melee(46.0)
 
 func _boss_attack() -> void:
 	var direction: Vector2 = global_position.direction_to(target)
@@ -194,151 +190,123 @@ func _boss_attack() -> void:
 			match pattern:
 				0:
 					if _shot_count < phase + 1:
-						_shoot(direction * 150.0, "normal", "nature", 14.0)
+						_shoot(direction * 150.0, "normal")
 				1:
 					if _shot_count < 3:
-						_shoot(Vector2(facing * (80.0 + _shot_count * 25.0), -155.0), "arc", "nature", 12.0)
+						_shoot(Vector2(facing * (80.0 + _shot_count * 25.0), -155.0), "arc")
 				2:
 					if _shot_count < phase:
-						_shoot(Vector2(facing * 150.0, 0), "shockwave", "nature", 16.0, Vector2(0, 8))
+						_shoot(Vector2(facing * 150.0, 0), "shockwave", Vector2(0, 8))
 				3:
 					if _shot_count == 0:
-						_spread(direction, 160.0, 3 + phase * 2, 0.19, "spread", "nature", 10.0)
+						_spread(direction, 160.0, 3 + phase * 2, 0.19, "spread")
 		1:
 			match pattern:
 				0:
 					if _shot_count < phase:
-						_shoot(direction * 125.0, "heavy", "ice", 23.0)
+						_shoot(direction * 125.0, "heavy")
 				1:
 					if _shot_count < 3:
-						_shoot(Vector2(facing * 140.0, 0), "shockwave", "ice", 12.0, Vector2(0, 8))
+						_shoot(Vector2(facing * 140.0, 0), "shockwave", Vector2(0, 8))
 				2:
 					if _shot_count < phase:
-						_spread(direction, 155.0, 5, 0.15, "spread", "ice", 9.0)
+						_spread(direction, 155.0, 5, 0.15, "spread")
 				3:
 					_next_shot = 0.13
-					_shoot(direction.rotated(sin(_attack_time * 2.0) * 0.12) * 250.0, "beam", "ice", 5.0)
+					_shoot(direction.rotated(sin(_attack_time * 2.0) * 0.12) * 250.0, "beam")
 		2:
 			match pattern:
 				0:
 					if _shot_count < phase + 1:
-						_shoot(Vector2(facing * 170, 0), "shockwave", "fire", 16.0, Vector2(0, 8))
+						_shoot(Vector2(facing * 170, 0), "shockwave", Vector2(0, 8))
 				1:
 					if _shot_count == 0:
-						_shoot(direction * 135.0, "heavy", "fire", 25.0)
+						_shoot(direction * 135.0, "heavy")
 				2:
 					if _shot_count < 2:
 						position.x = move_toward(position.x, target.x, 45.0)
-						_melee(48.0, 19.0)
+						_melee(48.0)
 				3:
 					if _shot_count == 0:
-						_spread(direction, 135.0, 3 + phase, 0.22, "explosive", "fire", 14.0)
+						_spread(direction, 135.0, 3 + phase, 0.22, "explosive")
 		3:
 			match pattern:
 				0:
 					if _shot_count < phase + 1:
-						_shoot(direction * 125.0, "dark", "spirit", 14.0)
+						_shoot(direction * 125.0, "dark")
 				1:
 					if _shot_count == 0:
-						_shoot(direction * 145.0, "dark", "spirit", 12.0)
-						for angle in [-0.40, -0.20, 0.20, 0.40]:
-							_decoys.append({"position": global_position + Vector2(facing * 22, -8), "velocity": direction.rotated(angle) * 145.0, "life": 2.0})
+						_shoot(direction * 145.0, "dark")
 				2:
 					_next_shot = 0.16
-					_shoot(direction * 220.0, "beam", "spirit", 5.0)
+					_shoot(direction * 220.0, "beam")
 				3:
 					if _shot_count < phase:
-						_shoot(Vector2(facing * 155.0, 0), "shockwave", "spirit", 14.0, Vector2(0, 8))
+						_shoot(Vector2(facing * 155.0, 0), "shockwave", Vector2(0, 8))
 		4:
 			match pattern:
 				0:
 					if _shot_count < phase + 1:
-						_shoot(direction.rotated((_shot_count - 1) * 0.10) * 165.0, "normal", ["fire", "ice", "nature"][_shot_count % 3], 14.0)
+						_shoot(direction.rotated((_shot_count - 1) * 0.10) * 165.0, "normal")
 				1:
 					if _shot_count < phase:
-						_shoot(direction * 145.0, "heavy", "fire", 23.0)
+						_shoot(direction * 145.0, "heavy")
 				2:
 					if _shot_count == 0:
-						_spread(direction, 160.0, 3 + phase, 0.18, "dark", "spirit", 12.0)
+						_spread(direction, 160.0, 3 + phase, 0.18, "dark")
 				3:
 					_next_shot = 0.16
-					_shoot(direction * 240.0, "beam", "ice", 5.0)
+					_shoot(direction * 240.0, "beam")
 
-func _shoot(velocity: Vector2, kind: String, element: String, damage: float = 12.0, offset: Vector2 = Vector2.ZERO) -> Node:
+func _shoot(velocity: Vector2, kind: String, offset: Vector2 = Vector2.ZERO) -> Node:
 	var projectile_script: Script = load("res://scripts/projectile.gd") as Script
 	if projectile_script == null:
 		return null
-	var shot: Node = projectile_script.spawn(get_parent(), global_position + Vector2(facing * 22.0, -8.0) + offset, velocity, damage, kind, element, 0)
+	var shot: Node = projectile_script.spawn(get_parent(), global_position + Vector2(facing * 22.0, -8.0) + offset, velocity, kind, 0)
 	shot.set("owner_actor", self)
 	return shot
 
-func _spread(direction: Vector2, speed: float, count: int, spacing: float, kind: String, element: String, damage: float) -> void:
+func _spread(direction: Vector2, speed: float, count: int, spacing: float, kind: String) -> void:
 	for i in count:
-		_shoot(direction.rotated((i - (count - 1) * 0.5) * spacing) * speed, kind, element, damage)
+		_shoot(direction.rotated((i - (count - 1) * 0.5) * spacing) * speed, kind)
 
-func _melee(radius: float, damage: float) -> void:
+func _melee(radius: float) -> void:
 	if is_instance_valid(_player) and global_position.distance_to(_player.global_position + Vector2(0, -15)) < radius:
-		_player.take_damage(damage, global_position)
+		_player.kill(global_position)
 
-func take_damage(amount: float, from: Vector2, perfect: bool = false) -> void:
-	if state == State.DEAD or _hit_cooldown > 0.0 or amount <= 0.0:
+func _contact_check() -> void:
+	# Contact during an attack kills the player, same as a direct melee strike.
+	if is_boss or not is_instance_valid(_player):
 		return
-	if is_instance_valid(_player):
-		var player_mode: int = int(_player.get("mode"))
-		if ((not is_boss and archetype == 5) or (is_boss and region == 3)) and player_mode < 4:
-			_flash = 0.08
-			return
-	var dealt: float = amount
-	if not is_boss and archetype == 3 and signf(from.x - global_position.x) == facing and not perfect:
-		dealt *= 0.55
-	if is_boss and region == 1 and state != State.RECOVER and state != State.STUNNED and not perfect:
-		dealt *= 0.6
-	if is_boss and region == 2 and not perfect:
-		dealt *= 0.7
-	hp = maxf(0.0, hp - dealt)
-	_hit_cooldown = 0.06
-	_flash = 0.13
-	knock_velocity = Vector2(signf(global_position.x - from.x) * (20.0 if is_boss else 85.0), 0)
-	if hp <= 0.0:
+	if global_position.distance_to(_player.global_position + Vector2(0, -18)) < 22.0:
+		_player.kill(global_position)
+
+func hit_by(_source: Node, from: Vector2, cause: String) -> bool:
+	if state == State.DEAD or _death_emitted:
+		return false
+	if not is_boss and archetype == 3 and cause == "reflect":
+		var side: float = signf(from.x - global_position.x)
+		if facing == 0.0 or side == facing:
+			_flash = 0.1
+			return false
+	if not is_boss:
 		_die()
-		return
-	var desired_phase: int = 3 if is_boss and region == 4 and hp < max_hp * 0.25 else (2 if hp < max_hp * 0.5 else 1)
-	if is_boss and desired_phase > phase:
-		phase = desired_phase
+		return true
+	if hit_guard > 0.0:
+		return false
+	hit_guard = BOSS_HIT_GUARD
+	hits_left -= 1
+	_flash = 0.13
+	if hits_left <= 0:
+		hits_left = 0
+		_die()
+		return true
+	var desired: int = phase_for_hits(hits_left)
+	if desired > phase:
+		phase = desired
 		phase_changed.emit(phase)
 		_enter(State.STUNNED, 0.8)
-	elif perfect:
-		stun(0.6 if is_boss else 0.9)
 	queue_redraw()
-
-func stun(seconds: float) -> void:
-	if state != State.DEAD:
-		_enter(State.STUNNED, maxf(state_time if state == State.STUNNED else 0.0, seconds))
-
-func apply_status(element: String) -> void:
-	# Projectile layer calls this only after an actual damage event.
-	if state == State.DEAD:
-		return
-	match element:
-		"ice": slow_timer = 1.4
-		"fire": burn_timer = 2.2
-		"nature", "poison": poison_timer = 2.8
-
-func intercept_projectile(projectile: Node) -> bool:
-	# A returned projectile remains reflectable; never an unbounded ping-pong loop.
-	if not is_boss or region != 4 or state == State.DEAD or state == State.STUNNED or _reflection_cooldown > 0.0:
-		return false
-	if int(projectile.get("reflection_count")) != 1 or attack_index % 3 != 1:
-		return false
-	var vel: Vector2 = projectile.get("velocity")
-	projectile.set("velocity", vel.bounce(Vector2(facing, 0)))
-	projectile.set("team", 0)
-	projectile.set("owner_actor", self)
-	projectile.set("reflection_count", 2)
-	projectile.set("collision_grace", 0.08)
-	projectile.set("global_position", global_position + Vector2(facing * (hurt_radius + 15.0), -8))
-	_reflection_cooldown = 1.5
-	_flash = 0.12
 	return true
 
 func _die() -> void:
@@ -356,17 +324,9 @@ func _die() -> void:
 	defeated.emit(self)
 
 func _draw() -> void:
-	for decoy in _decoys:
-		var point: Vector2 = to_local(decoy.position)
-		var alpha: float = minf(float(decoy.life), 0.42)
-		# Hollow, dim orbs are harmless memories; solid bright orbs are real.
-		draw_arc(point.round(), 5, 0, TAU, 8, Color(0.65, 0.5, 0.85, alpha), 1)
 	var tint: Color = PALETTES[region]
 	var scale_factor: float = 1.65 if is_boss else 1.0
-	var bob: float = roundf(sin(age * 3.0) * (3.0 if archetype == 4 or archetype == 5 else 1.0))
-	var transparency: float = 1.0
-	if ((not is_boss and archetype == 5) or (is_boss and region == 3)) and is_instance_valid(_player) and int(_player.get("mode")) < 4:
-		transparency = 0.30
+	var bob: float = roundf(sin(age * 3.0) * (3.0 if archetype == 4 else 1.0))
 	if state == State.DEAD:
 		for i in 9:
 			var angle: float = i * TAU / 9.0
@@ -374,10 +334,9 @@ func _draw() -> void:
 			draw_rect(Rect2(point.round(), Vector2(3, 3)), Color(tint, maxf(state_time / 0.55, 0)))
 		return
 	draw_set_transform(Vector2(0, bob), 0, Vector2.ONE * scale_factor)
-	tint.a = transparency
 	var body: Color = tint.darkened(0.6)
 	if _flash > 0:
-		body = Color(1, 1, 1, transparency)
+		body = Color(1, 1, 1)
 	draw_rect(Rect2(-12, -19, 24, 35), Color("0a101d"))
 	if is_boss:
 		# Each boss has a distinct silhouette, not just a palette swap.
@@ -406,7 +365,7 @@ func _draw() -> void:
 			0, 2:
 				draw_rect(Rect2(-8, -16, 16, 26), body)
 				draw_line(Vector2(facing * 13, -15), Vector2(facing * 18, 8), tint, 2)
-			1, 5:
+			1:
 				draw_colored_polygon(PackedVector2Array([Vector2(0, -24), Vector2(-12, 15), Vector2(12, 15)]), body)
 			3:
 				draw_rect(Rect2(-12, -18, 24, 31), body)
@@ -432,6 +391,3 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO)
 	if state == State.TELEGRAPH and is_boss and attack_index % 4 == 2 and region == 2:
 		draw_line(Vector2.ZERO, Vector2(facing * 94, 0), Color(1.0, 0.4, 0.25, 0.5), 2)
-	if hp < max_hp and not is_boss:
-		draw_rect(Rect2(-17, -31, 34, 3), Color("172333"))
-		draw_rect(Rect2(-17, -31, 34 * hp / max_hp, 3), tint)

@@ -1,29 +1,55 @@
 extends RefCounted
 class_name PrismSave
 
-const PATH := "user://prismbound_save.json"
-const BACKUP := "user://prismbound_save.backup.json"
-const SETTINGS := "user://prismbound_settings.json"
+static var PATH := "user://prismbound_save.json"
+static var BACKUP := "user://prismbound_save.backup.json"
+static var SETTINGS := "user://prismbound_settings.json"
 
 static func fresh() -> Dictionary:
-	return {"version": 1, "region": 0, "unlocked": 0, "upgrades": 0, "shards": 0, "cleared": [], "flags": {}, "ending": "", "checkpoint": 0, "hp": 100.0}
+	return {"version": 2, "unlocked_chapter": 0, "best_times": {}, "total_deaths": 0}
+
+static func _is_num(v: Variant) -> bool:
+	return v is float or v is int
 
 static func valid(data: Variant) -> bool:
 	if not data is Dictionary:
 		return false
-	for key in ["version", "region", "unlocked", "upgrades", "shards"]:
-		if not data.has(key) or not (data[key] is float or data[key] is int):
+	for key in ["version", "unlocked_chapter", "total_deaths"]:
+		if not data.has(key) or not _is_num(data[key]):
 			return false
-	if int(data.version) != 1 or int(data.region) < 0 or int(data.region) > 4:
+	if int(data.version) != 2 or int(data.unlocked_chapter) < 0 or int(data.unlocked_chapter) > 4 or int(data.total_deaths) < 0:
 		return false
-	if int(data.unlocked) < 0 or int(data.unlocked) > 4 or int(data.upgrades) < 0 or int(data.upgrades) > 20 or int(data.shards) < 0:
+	if not data.get("best_times") is Dictionary:
 		return false
-	if not data.get("cleared", []) is Array or not data.get("flags", {}) is Dictionary:
-		return false
-	for area in data.get("cleared", []):
-		if not (area is float or area is int) or int(area) < 0 or int(area) > 4:
+	for room in data.best_times:
+		if not _is_num(data.best_times[room]) or not is_finite(float(data.best_times[room])) or float(data.best_times[room]) <= 0.0:
 			return false
-	return data.get("ending", "") is String
+	return true
+
+static func migrate(data: Dictionary) -> Dictionary:
+	if not data.has("version") or not _is_num(data.version):
+		return {}
+	var version := int(data.version)
+	if version == 2:
+		return data
+	if version != 1:
+		return {}
+	var result := fresh()
+	if data.has("unlocked"):
+		if not _is_num(data.unlocked):
+			return {}
+		result.unlocked_chapter = clampi(int(data.unlocked), 0, 4)
+	return result
+
+static func record_room(data: Dictionary, room_id: String, time: float) -> Dictionary:
+	var result := data.duplicate(true)
+	if not is_finite(time) or time <= 0.0:
+		return result
+	var times: Dictionary = result.get("best_times", {})
+	if not times.has(room_id) or time < float(times[room_id]):
+		times[room_id] = time
+	result.best_times = times
+	return result
 
 static func read_path(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
@@ -32,16 +58,21 @@ static func read_path(path: String) -> Dictionary:
 	if not file:
 		return {}
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	if not valid(parsed):
+	if not parsed is Dictionary:
 		return {}
-	var result := fresh()
-	result.merge(parsed, true)
-	return result
+	var migrated := migrate(parsed)
+	if not valid(migrated):
+		return {}
+	for key in ["version", "unlocked_chapter", "total_deaths"]:
+		migrated[key] = int(migrated[key])
+	return migrated
 
 static func load_game() -> Dictionary:
 	var result := read_path(PATH)
 	if result.is_empty():
 		result = read_path(BACKUP)
+	if result.is_empty():
+		result = fresh()
 	return result
 
 static func save_game(data: Dictionary) -> bool:
@@ -65,7 +96,7 @@ static func reset_game() -> void:
 			DirAccess.remove_absolute(path)
 
 static func defaults() -> Dictionary:
-	return {"master": 0.8, "music": 0.5, "sfx": 0.75, "fullscreen": false, "resolution": 2, "vsync": true, "shake": 0.35, "effects": 0.6, "assist": false, "snap": false, "language": "tr", "bindings": {}}
+	return {"master": 0.8, "music": 0.5, "sfx": 0.75, "fullscreen": false, "resolution": 2, "vsync": true, "effects": 0.6, "snap": false, "bindings": {}}
 
 static func load_settings() -> Dictionary:
 	var result := defaults()
@@ -77,7 +108,7 @@ static func load_settings() -> Dictionary:
 				for key in result:
 					if data.has(key) and typeof(data[key]) == typeof(result[key]):
 						result[key] = data[key]
-	for key in ["master", "music", "sfx", "shake", "effects"]:
+	for key in ["master", "music", "sfx", "effects"]:
 		result[key] = clampf(float(result[key]), 0.0, 1.0)
 	result.resolution = clampi(int(result.resolution), 1, 3)
 	return result
@@ -86,3 +117,4 @@ static func save_settings(settings: Dictionary) -> void:
 	var file := FileAccess.open(SETTINGS, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(settings, "\t"))
+

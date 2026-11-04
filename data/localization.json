@@ -1,0 +1,6 @@
+{
+"schema_version": 1,
+"default_locale": "tr",
+"locales": {"tr": {"complete": true, "dialogue_resource": "res://data/dialogues_tr.json"}, "en": {"complete": false, "dialogue_resource": ""}},
+"note": "English is deliberately not selectable until translation of UI and dialogue is complete."
+}
