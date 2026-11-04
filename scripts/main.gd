@@ -198,14 +198,11 @@ func start_world(area: int) -> void:
 
 func apply_player_settings() -> void:
 	if not is_instance_valid(world) or not is_instance_valid(world.player): return
-	world.player.set("perfect_assist", bool(settings.assist))
 	world.player.set("snap_aim", bool(settings.snap))
 	world.player.set("effects_intensity", float(settings.effects))
 
 func save_progress() -> void:
 	if is_instance_valid(world) and is_instance_valid(world.player):
-		progress.shards = int(world.player.shards)
-		progress.hp = float(world.player.hp)
 		progress.flags["checkpoint_region"] = world.region
 		progress.flags["checkpoint_id"] = world.checkpoint_id
 	if not Save.save_game(progress): notice = "Kayıt yazılamadı. Klasör erişimini kontrol et."
@@ -227,7 +224,6 @@ func on_region_completed(area: int) -> void:
 	progress.flags.erase("checkpoint_id")
 	progress.region = mini(area + 1, 4)
 	progress.unlocked = maxi(int(progress.unlocked), int(progress.region))
-	progress.shards = int(world.player.shards)
 	Save.save_game(progress)
 	audio.play_effect("victory")
 	play_story("boss_%d" % area, func():
@@ -298,14 +294,11 @@ func show_altar() -> void:
 	label_at("PRİZMA SUNAĞI", Vector2(66, 60), 25, TEAL)
 	var cost := 15 + int(progress.upgrades) * 10
 	label_at("İlerleme kaydedildi. Can ve direnç yenilendi.", Vector2(66, 105), 13)
-	label_at("Parça: %d     /     Gelişim: %d" % [world.player.shards, progress.upgrades], Vector2(66, 139), 13, MUTE)
+	label_at("Gelişim: %d" % [progress.upgrades], Vector2(66, 139), 13, MUTE)
 	var buy := button("DİRENÇ +12  /  %d PARÇA" % cost, Vector2(66, 182), func():
-		world.player.shards -= cost
 		progress.upgrades += 1
-		world.player.configure_progress(world.region, int(progress.upgrades))
-		world.player.heal()
 		save_progress(); show_altar_refresh(), 300)
-	buy.disabled = world.player.shards < cost or int(progress.upgrades) >= 8
+	buy.disabled = true
 	button("YOLA DEVAM", Vector2(66, 228), show_hud, 300).grab_focus()
 
 func show_altar_refresh() -> void:
@@ -448,11 +441,7 @@ func _process(delta: float) -> void:
 	clock_time += delta
 	if page == "game" and is_instance_valid(world) and is_instance_valid(world.player) and is_instance_valid(health_bar):
 		var p: Node = world.player
-		health_bar.max_value = p.max_hp; health_bar.value = p.hp
-		stamina_bar.max_value = p.max_stamina; stamina_bar.value = p.stamina
-		energy_bar.value = p.energy
-		var names := ["Prizma Kalkanı", "Kırık Ayna", "Odak Aynası", "Ağır Ayna", "Ruh Aynası", "Prizma Modu"]
-		status_label.text = "%s   /   %d parça" % [names[clampi(p.mode, 0, 5)], p.shards]
+		status_label.text = "Prizma Kalkanı"
 		objective_label.text = world.objective
 		objective_label.visible = world.hint_timer <= 0
 		var boss_alive: bool = is_instance_valid(world.boss) and world.boss.hp > 0

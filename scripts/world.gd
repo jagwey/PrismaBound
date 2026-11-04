@@ -76,8 +76,6 @@ func _ready() -> void:
 	var player_script: Script = load("res://scripts/player.gd")
 	player = player_script.new()
 	player.position = checkpoint
-	player.configure_progress(region, int(progress.get("upgrades", 0)))
-	player.shards = int(progress.get("shards", 0))
 	add_child(player)
 	player.died.connect(_on_player_died)
 	camera = Camera2D.new()
@@ -177,18 +175,14 @@ func _physics_process(delta: float) -> void:
 	if is_instance_valid(moving_platform):
 		moving_platform.position = Vector2(815 + sin(elapsed * 1.15) * 36, 267 + sin(elapsed * 0.8) * 12)
 	if is_instance_valid(spirit_shape):
-		spirit_shape.set_deferred("disabled", int(player.mode) != 4 and int(player.mode) != 5)
+		spirit_shape.set_deferred("disabled", true)
 	camera.position.x = roundf(clampf(player.position.x, 320, WORLD_WIDTH - 320))
 	_update_effects(delta)
 	if dead or transitioning:
 		queue_redraw()
 		return
 	if player.position.y > 410:
-		player.take_damage(18.0, player.position + Vector2(0, 40))
-		if not dead:
-			player.position = checkpoint
-			player.velocity = Vector2.ZERO
-			_show_hint("Uçurum seni sunağa geri bıraktı. Kayıp: 18 can.")
+		player.kill(player.position + Vector2(0, 40))
 	if player.position.x > 1660 and player.position.x < 2310 and not puzzle_solved:
 		emitter_timer -= delta
 		if emitter_timer <= 0.0:
@@ -198,7 +192,7 @@ func _physics_process(delta: float) -> void:
 		hazard_clock += delta
 		if fmod(elapsed, 3.5) > 2.0 and player.position.y > 277 and hazard_clock > 0.7:
 			hazard_clock = 0.0
-			player.take_damage(12.0, Vector2(1325, 310))
+			player.kill(Vector2(1325, 310))
 	if player.position.x > 2450 and puzzle_solved:
 		_spawn_boss()
 	if Input.is_action_just_pressed("interact"):
@@ -214,7 +208,6 @@ func _interact() -> void:
 				return
 			checkpoint = point
 			checkpoint_id = 1 if point.x > 2000 else 0
-			player.heal()
 			if checkpoint_cooldown <= 0.0:
 				checkpoint_cooldown = 1.0
 				checkpoint_reached.emit(region)
@@ -248,7 +241,7 @@ func _emit_puzzle_projectile() -> void:
 		element = ELEMENTS[emitter_index % 3]
 		emitter_index += 1
 	var speed: float = 160.0 if region < 2 else 145.0
-	var shot: Node2D = _projectile_script.spawn(self, EMITTER, Vector2(-speed, 0), 10.0, kind, element, 0)
+	var shot: Node2D = _projectile_script.spawn(self, EMITTER, Vector2(-speed, 0), kind, 0)
 	shot.set_meta("puzzle_shot", true)
 	shot.set_meta("world_mirror_time", -10.0)
 	_burst(EMITTER, _element_color(element), 5)
@@ -297,7 +290,6 @@ func _solve_puzzle() -> void:
 		return
 	puzzle_solved = true
 	_remove_puzzle_gate()
-	player.add_shards(6)
 	_show_hint("Kristal mühür çözüldü. Sağdaki sunakta kaydet.", 5.0)
 	_update_objective()
 
@@ -307,8 +299,6 @@ func _remove_puzzle_gate() -> void:
 		puzzle_gate = null
 
 func _on_enemy_defeated(enemy: Node) -> void:
-	if is_instance_valid(player):
-		player.add_shards(3)
 	if enemy is Node2D:
 		_burst(enemy.position, palette[4], 12)
 
@@ -320,8 +310,6 @@ func _on_boss_defeated(enemy: Node) -> void:
 	if is_instance_valid(arena_gate):
 		arena_gate.queue_free()
 		arena_gate = null
-	player.add_shards(15)
-	player.heal()
 	_burst(enemy.position, palette[4], 30)
 	_show_hint("Prizma parçası özgür. Sağdaki geçitte E'ye bas.", 6.0)
 	story_requested.emit("victory_%d" % region)
@@ -336,7 +324,8 @@ func _on_player_died() -> void:
 func restart_checkpoint() -> void:
 	dead = false
 	transitioning = false
-	player.heal()
+	player.dead = false
+	player.state = "idle"
 	player.position = checkpoint
 	player.velocity = Vector2.ZERO
 	for node in get_children():
@@ -413,7 +402,7 @@ func _draw() -> void:
 		draw_line(mp + Vector2(-34, 6), mp + Vector2(-34, 20), palette[3], 2)
 		draw_line(mp + Vector2(34, 6), mp + Vector2(34, 20), palette[3], 2)
 	if region == 3:
-		var visible_bridge: bool = is_instance_valid(player) and (int(player.mode) == 4 or int(player.mode) == 5)
+		var visible_bridge: bool = false
 		var bridge_color: Color = palette[4] if visible_bridge else Color(palette[3], 0.22)
 		for bx in range(742, 888, 16):
 			draw_rect(Rect2(bx, 278, 12, 4 if visible_bridge else 1), bridge_color)

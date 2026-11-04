@@ -268,7 +268,7 @@ func _shoot(velocity: Vector2, kind: String, element: String, damage: float = 12
 	var projectile_script: Script = load("res://scripts/projectile.gd") as Script
 	if projectile_script == null:
 		return null
-	var shot: Node = projectile_script.spawn(get_parent(), global_position + Vector2(facing * 22.0, -8.0) + offset, velocity, damage, kind, element, 0)
+	var shot: Node = projectile_script.spawn(get_parent(), global_position + Vector2(facing * 22.0, -8.0) + offset, velocity, kind, 0)
 	shot.set("owner_actor", self)
 	return shot
 
@@ -278,16 +278,11 @@ func _spread(direction: Vector2, speed: float, count: int, spacing: float, kind:
 
 func _melee(radius: float, damage: float) -> void:
 	if is_instance_valid(_player) and global_position.distance_to(_player.global_position + Vector2(0, -15)) < radius:
-		_player.take_damage(damage, global_position)
+		_player.kill(global_position)
 
 func take_damage(amount: float, from: Vector2, perfect: bool = false) -> void:
 	if state == State.DEAD or _hit_cooldown > 0.0 or amount <= 0.0:
 		return
-	if is_instance_valid(_player):
-		var player_mode: int = int(_player.get("mode"))
-		if ((not is_boss and archetype == 5) or (is_boss and region == 3)) and player_mode < 4:
-			_flash = 0.08
-			return
 	var dealt: float = amount
 	if not is_boss and archetype == 3 and signf(from.x - global_position.x) == facing and not perfect:
 		dealt *= 0.55
@@ -310,6 +305,13 @@ func take_damage(amount: float, from: Vector2, perfect: bool = false) -> void:
 	elif perfect:
 		stun(0.6 if is_boss else 0.9)
 	queue_redraw()
+
+func hit_by(_source: Node, _from: Vector2, _cause: String) -> bool:
+	# Minimal stub (Task 4 rewrites): any reflected hit kills.
+	if state == State.DEAD:
+		return false
+	_die()
+	return true
 
 func stun(seconds: float) -> void:
 	if state != State.DEAD:
