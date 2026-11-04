@@ -444,11 +444,11 @@ func _process(delta: float) -> void:
 		status_label.text = "Prizma Kalkanı"
 		objective_label.text = world.objective
 		objective_label.visible = world.hint_timer <= 0
-		var boss_alive: bool = is_instance_valid(world.boss) and world.boss.hp > 0
+		var boss_alive: bool = is_instance_valid(world.boss) and world.boss.hits_left > 0
 		boss_bar.visible = boss_alive
 		boss_name.visible = boss_alive
 		if boss_alive:
-			boss_bar.max_value = world.boss.max_hp; boss_bar.value = world.boss.hp; boss_name.text = world.boss.display_name
+			boss_bar.max_value = world.boss.BOSS_HITS[world.boss.region]; boss_bar.value = world.boss.hits_left; boss_name.text = world.boss.display_name
 		audio.set_region(world.region, boss_alive and p.position.x > 2400)
 	queue_redraw()
 
