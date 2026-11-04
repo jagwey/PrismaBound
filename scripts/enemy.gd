@@ -35,6 +35,11 @@ var _feint: bool = false
 var _death_emitted: bool = false
 var _reflection_cooldown: float = 0.0
 var _player: Node2D
+var slow_timer: float = 0.0
+var burn_timer: float = 0.0
+var poison_timer: float = 0.0
+var _status_tick: float = 0.0
+var _decoys: Array[Dictionary] = []
 
 func configure(type: int, area: int, boss: bool = false) -> void:
 	archetype = clampi(type, 0, 6)
@@ -55,7 +60,19 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	age += delta
-	state_time -= delta
+	state_time -= delta * (0.7 if slow_timer > 0.0 else 1.0)
+	slow_timer = maxf(0.0, slow_timer - delta)
+	burn_timer = maxf(0.0, burn_timer - delta)
+	poison_timer = maxf(0.0, poison_timer - delta)
+	_status_tick -= delta
+	if state != State.DEAD and (burn_timer > 0.0 or poison_timer > 0.0) and _status_tick <= 0.0:
+		_status_tick = 0.7
+		take_damage(2.0, global_position - Vector2(facing * 20, 0))
+	for i in range(_decoys.size() - 1, -1, -1):
+		_decoys[i]["position"] += _decoys[i]["velocity"] * delta
+		_decoys[i]["life"] -= delta
+		if float(_decoys[i]["life"]) <= 0.0:
+			_decoys.remove_at(i)
 	_hit_cooldown = maxf(0.0, _hit_cooldown - delta)
 	_flash = maxf(0.0, _flash - delta)
 	_reflection_cooldown = maxf(0.0, _reflection_cooldown - delta)
@@ -105,7 +122,7 @@ func _physics_process(delta: float) -> void:
 					_attack_time = 0.0
 		State.ATTACK:
 			_attack_time += delta
-			_next_shot -= delta
+			_next_shot -= delta * (0.7 if slow_timer > 0.0 else 1.0)
 			if _next_shot <= 0.0:
 				_attack_tick()
 			if state_time <= 0.0:
@@ -223,7 +240,9 @@ func _boss_attack() -> void:
 						_shoot(direction * 125.0, "dark", "spirit", 14.0)
 				1:
 					if _shot_count == 0:
-						_spread(direction, 145.0, 5, 0.20, "spread", "spirit", 9.0)
+						_shoot(direction * 145.0, "dark", "spirit", 12.0)
+						for angle in [-0.40, -0.20, 0.20, 0.40]:
+							_decoys.append({"position": global_position + Vector2(facing * 22, -8), "velocity": direction.rotated(angle) * 145.0, "life": 2.0})
 				2:
 					_next_shot = 0.16
 					_shoot(direction * 220.0, "beam", "spirit", 5.0)
@@ -296,6 +315,15 @@ func stun(seconds: float) -> void:
 	if state != State.DEAD:
 		_enter(State.STUNNED, maxf(state_time if state == State.STUNNED else 0.0, seconds))
 
+func apply_status(element: String) -> void:
+	# Projectile layer calls this only after an actual damage event.
+	if state == State.DEAD:
+		return
+	match element:
+		"ice": slow_timer = 1.4
+		"fire": burn_timer = 2.2
+		"nature", "poison": poison_timer = 2.8
+
 func intercept_projectile(projectile: Node) -> bool:
 	# A returned projectile remains reflectable; never an unbounded ping-pong loop.
 	if not is_boss or region != 4 or state == State.DEAD or state == State.STUNNED or _reflection_cooldown > 0.0:
@@ -319,10 +347,20 @@ func _die() -> void:
 	_death_emitted = true
 	remove_from_group("enemies")
 	remove_from_group("bosses")
+	if is_boss:
+		for projectile in get_tree().get_nodes_in_group("projectiles"):
+			if projectile.get("owner_actor") == self:
+				# No lingering boss-owned attacks after the victory transition.
+				projectile.queue_free()
 	_enter(State.DEAD, 0.55)
 	defeated.emit(self)
 
 func _draw() -> void:
+	for decoy in _decoys:
+		var point: Vector2 = to_local(decoy.position)
+		var alpha: float = minf(float(decoy.life), 0.42)
+		# Hollow, dim orbs are harmless memories; solid bright orbs are real.
+		draw_arc(point.round(), 5, 0, TAU, 8, Color(0.65, 0.5, 0.85, alpha), 1)
 	var tint: Color = PALETTES[region]
 	var scale_factor: float = 1.65 if is_boss else 1.0
 	var bob: float = roundf(sin(age * 3.0) * (3.0 if archetype == 4 or archetype == 5 else 1.0))

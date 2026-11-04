@@ -78,6 +78,8 @@ func run() -> void:
 		for shot in boss.shots:
 			kinds[shot.kind] = true
 			check(shot.velocity.length() > 0 and shot.damage > 0, "Valid boss projectile")
+		if area == 3:
+			check(boss._decoys.size() == 4, "Temple creates four harmless visual memories")
 		boss.take_damage(boss.max_hp * 0.6, Vector2.ZERO, true)
 		check(boss.phase == 2, "Boss phase transition %s" % area)
 		check(boss.state == boss.State.STUNNED, "Phase transition recovery %s" % area)
@@ -100,6 +102,72 @@ func run() -> void:
 		boss.free()
 	for kind in ["normal", "heavy", "arc", "spread", "beam", "shockwave", "dark", "explosive"]:
 		check(kinds.has(kind), "Attack vocabulary contains %s" % kind)
+	await real_projectile_checks()
 	print("ENEMY TESTS: %d checks; %d failures" % [checks, failures])
 	arena.free()
 	quit(1 if failures else 0)
+
+func real_projectile_checks() -> void:
+	# Exercise actual Player + Projectile + Enemy scripts together. The player is a
+	# stationary timed-reflect fixture, not an AI completing navigation or combat.
+	player.free()
+	var player_script: Script = load("res://scripts/player.gd")
+	var projectile_script: Script = load("res://scripts/projectile.gd")
+	var enemy_script: Script = load("res://scripts/enemy.gd")
+	var scripts_valid: bool = player_script != null and projectile_script != null and enemy_script != null and player_script.can_instantiate() and projectile_script.can_instantiate() and enemy_script.can_instantiate()
+	check(scripts_valid, "Real combat scripts compile; run --editor --import before standalone tests")
+	if not scripts_valid:
+		return
+	var real_player = player_script.new()
+	arena.add_child(real_player)
+	real_player.position = Vector2(80, 298)
+	real_player.set_physics_process(false)
+	real_player.mode = 4
+	real_player.aim = Vector2.RIGHT
+	for action in ["absorb"]:
+		if not InputMap.has_action(action): InputMap.add_action(action)
+	for area in 5:
+		var boss = enemy_script.new()
+		boss.configure(0, area, true)
+		boss.position = Vector2(250, 280)
+		arena.add_child(boss)
+		boss.set_physics_process(false)
+		boss.attack_index = 1 if area == 4 else 0
+		boss._enter(boss.State.RECOVER, 1.0)
+		var attempts: int = 0
+		var returned: bool = false
+		while boss.hp > 0 and attempts < 30:
+			attempts += 1
+			boss._hit_cooldown = 0.0
+			boss._reflection_cooldown = 0.0
+			real_player.reflect_timer = 0.05
+			real_player.hit_stop = 0.0
+			var projectile = projectile_script.spawn(arena, Vector2(225, 280), Vector2.LEFT * 160, 18, "normal", "neutral")
+			projectile.owner_actor = boss
+			projectile.set_physics_process(false)
+			for frame in 220:
+				if projectile.dead or projectile.is_queued_for_deletion(): break
+				projectile._physics_process(1.0 / 60.0)
+				if projectile.reflection_count >= 2: returned = true
+			check(projectile.dead or projectile.is_queued_for_deletion(), "Real reflected shot reaches actor in region %s" % area)
+			if is_instance_valid(projectile): projectile.free()
+		check(boss.hp <= 0.0, "Actual reflected projectiles can defeat boss %s" % area)
+		check(boss.phase >= 2, "Real boss fight crosses phase boundary %s" % area)
+		if area == 4: check(returned, "Real projectile survives final counter then returns again")
+		boss.free()
+	var status_enemy = enemy_script.new()
+	status_enemy.configure(0, 0)
+	status_enemy.position = Vector2(200, 280)
+	arena.add_child(status_enemy)
+	status_enemy.set_physics_process(false)
+	status_enemy.apply_status("ice")
+	status_enemy._enter(status_enemy.State.RECOVER, 1.0)
+	status_enemy._physics_process(0.1)
+	check(is_equal_approx(status_enemy.state_time, 0.93), "Ice slows real enemy action timing")
+	status_enemy.apply_status("fire")
+	var before: float = status_enemy.hp
+	status_enemy._physics_process(0.1)
+	check(status_enemy.hp < before, "Fire applies finite damage-over-time")
+	status_enemy.free()
+	real_player.free()
+	await process_frame
