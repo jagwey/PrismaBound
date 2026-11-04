@@ -164,7 +164,7 @@ func _spawn_boss() -> void:
 	boss.defeated.connect(_on_boss_defeated)
 	add_child(boss)
 	arena_gate = _body(Rect2(2410, 80, 10, 220), false)
-	story_requested.emit("boss_%d" % region)
+	story_requested.emit("encounter_%d" % region)
 	_update_objective()
 
 func _physics_process(delta: float) -> void:
@@ -574,3 +574,4 @@ func _diamond(point: Vector2, size: float, color: Color) -> void:
 
 func _world_text(point: Vector2, text: String, color: Color, size: int = 10) -> void:
 	draw_string(ThemeDB.fallback_font, point.round(), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
+
