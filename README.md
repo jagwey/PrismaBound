@@ -4,7 +4,8 @@ Godot 4.7.2 / GDScript / Windows / Türkçe. Bu depo, Katana Zero tarzı tek vur
 
 ## Çalıştırma
 
-- Windows: `builds/PRISMBOUND.exe` dosyasını aç. Not: bu exe pivot öncesi sürümdür; Godot 4.7.2 export şablonları kurulana kadar yenilenemiyor.
+- **İndir (Windows):** [Releases](https://github.com/jagwey/PrismaBound/releases/latest) sayfasından `PRISMBOUND_Windows.zip` dosyasını indir, aç ve `PRISMBOUND.exe`'yi çalıştır. Kurulum gerekmez.
+- Yerel derleme: `builds/PRISMBOUND.exe` (export ile üretilir, depoya eklenmez).
 - Düzenleme: Godot 4.7.2 ile `project.godot` dosyasını aç, F6 yerine F5 ile ana oyunu başlat.
 - Bağımlılık: Godot dışında ek paket gerekmez; Windows çalıştırılabilir dosyası motor kurulumunu gerektirmez.
 

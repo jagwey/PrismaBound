@@ -11,7 +11,7 @@
 - [x] 4. Oda sistemi + Orman bölümü (room_test 172/0)
 - [x] 5. HUD/skor/kayıt/diyalog (Görev 7: main.gd yeniden yazıldı; integration_test 62/0; core 79/0 enemy 178/0 save 31/0 room 172/0; smoke temiz; elle F5 oynanış testi (Orman 1-5 + boss) KULLANICIDA BEKLİYOR; kayıt v2 + göç `save_manager.gd` ✓ save_test 23/0; main.gd minimal .get uyumu, Görev 7 yeniden yazar)
 - [x] 8. Kalan bölümler (Maden/Kale/Tapınak/Prizma: 5 oda + boss) + diyalog metinleri yeni kontrollere uyarlandı; core 79/0 enemy 178/0 save 31/0 room 172/0 integration 62/0
-- [ ] Export: `builds/PRISMBOUND.exe` YENİLENEMEDİ (Godot 4.7.2 Windows export şablonları yok: `export_templates/4.7.2.stable/windows_release_x86_64.exe`); builds/ içindeki exe eski sürüm
+- [x] Export: `builds/PRISMBOUND.exe` yeni sürüm (2026-11-04); GitHub release v2.0.0 → jagwey/PrismaBound (`PRISMBOUND_Windows.zip`)
 - [ ] Manuel oynanış testi bekliyor (F5: tüm bölümler + boss)
 
 - [x] Final inceleme düzeltmeleri: RT fırlatma, rooms.json hata -> menü mesajı, duraklatma slow-mo ölçerini doldurmaz, bölüm ölüm sayacı HUD, ölü kod temizliği, README/diyalog güncellemesi (core 79/0 enemy 178/0 save 31/0 room 172/0 integration 77/0)
