@@ -108,6 +108,40 @@ func test_reflected_shot_kills_enemy() -> void:
 	enemy.free()
 	p.free()
 
+func test_slow_drains() -> void:
+	var tc := PrismTimeControl.new()
+	var s := tc.update(1.0, true)
+	check(is_equal_approx(s, 0.3), "Slow returns 0.3")
+	check(is_equal_approx(tc.meter, 2.0), "Slow drains 1 per real second")
+	check(is_equal_approx(Engine.time_scale, 0.3), "Slow writes Engine.time_scale")
+	tc.reset()
+
+func test_slow_empties() -> void:
+	var tc := PrismTimeControl.new()
+	tc.update(1.0, true)
+	var s := tc.update(3.0, true)
+	check(is_zero_approx(tc.meter), "Meter empties")
+	check(is_equal_approx(s, 1.0) and not tc.active, "Empty meter returns normal speed")
+	var s2 := tc.update(0.1, true)
+	check(is_equal_approx(s2, 1.0) and not tc.active, "No reactivation below 0.1")
+	tc.reset()
+
+func test_regen_delay() -> void:
+	var tc := PrismTimeControl.new()
+	tc.update(3.0, true)
+	tc.update(1.4, false)
+	check(is_zero_approx(tc.meter), "No regen during delay")
+	tc.update(0.1 + 2.0, false)
+	check(is_equal_approx(tc.meter, 3.0), "Full regen after delay")
+	tc.reset()
+
+func test_time_reset() -> void:
+	var tc := PrismTimeControl.new()
+	tc.update(0.5, true)
+	check(tc.active and is_equal_approx(Engine.time_scale, 0.3), "Active before reset")
+	tc.reset()
+	check(is_equal_approx(Engine.time_scale, 1.0) and not tc.active and is_equal_approx(tc.meter, 3.0), "Reset restores time and meter")
+
 func run() -> void:
 	for action in ["move_left", "move_right", "jump", "dash", "reflect", "throw", "slow", "restart", "interact", "pause", "aim_left", "aim_right", "aim_up", "aim_down"]:
 		if not InputMap.has_action(action): InputMap.add_action(action)
@@ -132,6 +166,10 @@ func run() -> void:
 	test_kill_idempotent()
 	test_dash_iframes()
 	test_reflected_shot_kills_enemy()
+	test_slow_drains()
+	test_slow_empties()
+	test_regen_delay()
+	test_time_reset()
 	player.effects_intensity = 0
 	# Real physics: floor, buffered input, airborne jump and gravity landing.
 	var floor_body := StaticBody2D.new()
