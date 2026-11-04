@@ -3,8 +3,8 @@
 ## Katana Zero tarzı pivot (2026-11-04)
 - [x] Tasarım kararları alındı (tam pivot; yansıtma + kalkan fırlatma; zaman yavaşlatma; skor; diyalog; çok vuruşlu boss)
 - [x] Spec: `docs/superpowers/specs/2026-11-04-katana-pivot-design.md`
-- [ ] Spec kullanıcı onayı
-- [ ] Uygulama planı (writing-plans)
+- [x] Spec kullanıcı onayı
+- [x] Uygulama planı: `docs/superpowers/plans/2026-11-04-katana-pivot.md` (8 görev) — onay bekliyor
 - [ ] 1. Çekirdek: player/projectile sadeleştirme, tek vuruş, yansıtma
 - [ ] 2. Kalkan fırlatma + zaman yavaşlatma
 - [ ] 3. Düşman sadeleştirme

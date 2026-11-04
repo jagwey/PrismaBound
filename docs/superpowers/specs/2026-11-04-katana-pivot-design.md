@@ -78,7 +78,7 @@ Boss odası `"boss": "forest"` alanı taşır. `data/regions.json` yalnız palet
 
 ## Hikaye
 
-`dialogues_tr.json` mevcut anahtarları (`intro`, `region_N`, `victory_N`) bölüm başı/sonu sahnesi olarak kullanılır. Seçim (`choice`) ve çoklu son kaldırılır; tek son.
+`dialogues_tr.json` mevcut anahtarları kullanılır: `intro` (oyun başı), `region_N` (bölüm N başı), `boss_N` (boss odası girişi), `ending_a` (tek son). Seçim (`choice`), `ending_b`, `curse`, `encounter_N` kullanılmaz.
 
 ## Mimari
 
