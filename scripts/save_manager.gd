@@ -82,7 +82,7 @@ static func save_game(data: Dictionary) -> bool:
 	var file := FileAccess.open(tmp, FileAccess.WRITE)
 	if not file:
 		return false
-	file.store_string(JSON.stringify(data, "	"))
+	file.store_string(JSON.stringify(data, "\t"))
 	file.close()
 	if read_path(tmp).is_empty():
 		return false
